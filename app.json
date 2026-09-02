@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "MoviEdu",
+    "slug": "moviedu",
+    "scheme": "moviedu",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121212"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "bundleIdentifier": "app.moviedu.kid",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiresFullScreen": true,
+        "UIBackgroundModes": []
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "app.moviedu.kid",
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-document-picker",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MoviEdu uses a picture you choose for each spelling word."
+        }
+      ]
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+# Private theme assets (character clips, likeness). Never commit.
+*
+!.gitignore
+!.gitkeep
