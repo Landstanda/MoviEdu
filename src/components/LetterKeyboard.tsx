@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   wrap: {
     width: '100%',
     paddingHorizontal: 8,
-    paddingBottom: 10,
+    paddingBottom: 22,
     gap: 8,
   },
   row: {

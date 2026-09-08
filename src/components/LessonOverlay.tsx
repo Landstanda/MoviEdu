@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     justifyContent: 'space-between',
     paddingTop: 18,
-    zIndex: 4,
+    zIndex: 20,
   },
   counter: {
     position: 'absolute',

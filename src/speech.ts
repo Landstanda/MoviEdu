@@ -1,4 +1,5 @@
 import * as Speech from 'expo-speech';
+import { Platform } from 'react-native';
 
 export async function speakText(
   text: string,
@@ -7,7 +8,7 @@ export async function speakText(
   Speech.stop();
   Speech.speak(text, {
     language: 'en-US',
-    rate: 0.85,
+    rate: Platform.OS === 'android' ? 0.9 : 0.85,
     pitch: 1,
     voice: voiceId ?? undefined,
   });

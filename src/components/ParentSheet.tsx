@@ -63,6 +63,7 @@ export function ParentSheet({
   const [voices, setVoices] = useState<Speech.Voice[]>([]);
   const [newWord, setNewWord] = useState('');
   const [newImage, setNewImage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -159,7 +160,7 @@ export function ParentSheet({
               </Text>
               <Text style={styles.hint}>
                 {needsCreate
-                  ? 'This is not the iPad unlock code. Pick digits only you know.'
+                  ? 'This is not the tablet lock PIN. Pick digits only you know.'
                   : 'Enter the parent PIN'}
               </Text>
               <Text style={styles.dots}>{pin.length ? '•'.repeat(pin.length) : ' '}</Text>
@@ -208,8 +209,10 @@ export function ParentSheet({
                     <Btn label="8" onPress={() => savePatch({ remainingLessons: 8 })} />
                   </View>
                   <Btn
-                    label="Import movie (MP4)"
+                    label={importing ? 'Copying movie…' : 'Import movie (MP4)'}
                     onPress={async () => {
+                      if (importing) return;
+                      setImporting(true);
                       try {
                         await importMovie();
                         setMovies(await listMedia());
@@ -218,9 +221,13 @@ export function ParentSheet({
                         if (msg !== 'canceled') {
                           Alert.alert(
                             'Could not import',
-                            'Use an MP4 (H.264 + AAC). MKV files from VLC will not play until converted in HandBrake.',
+                            msg.includes('play') || msg.includes('space') || msg.includes('copy')
+                              ? msg
+                              : 'Use an MP4 (H.264 + AAC). MKV files from VLC may not play until converted in HandBrake.',
                           );
                         }
+                      } finally {
+                        setImporting(false);
                       }
                     }}
                   />
@@ -345,7 +352,7 @@ export function ParentSheet({
                     onPress={() => savePatch({ ttsVoiceId: null })}
                     style={[styles.choice, !settings.ttsVoiceId && styles.choiceOn]}
                   >
-                    <Text style={styles.choiceText}>iPad default English</Text>
+                    <Text style={styles.choiceText}>Tablet default English</Text>
                   </Pressable>
                   {voices.map((v) => (
                     <Pressable

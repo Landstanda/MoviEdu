@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { ParentSheet } from './src/components/ParentSheet';
 import { getDb } from './src/db/client';
 import { loadActiveTrial } from './src/db/trial';
@@ -27,6 +27,23 @@ export default function App() {
       setReady(true);
     })();
   }, []);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (parentOpen) {
+        setParentOpen(false);
+        setLibraryKey((n) => n + 1);
+        playerRef.current?.reloadSettings();
+        return true;
+      }
+      if (route.name === 'player') {
+        playerRef.current?.onHardwareBack();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [parentOpen, route]);
 
   if (!ready) {
     return (

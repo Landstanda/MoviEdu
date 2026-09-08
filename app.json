@@ -13,25 +13,28 @@
       "resizeMode": "contain",
       "backgroundColor": "#121212"
     },
-    "ios": {
-      "supportsTablet": true,
-      "requireFullScreen": true,
-      "bundleIdentifier": "app.moviedu.kid",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIRequiresFullScreen": true,
-        "UIBackgroundModes": []
-      }
-    },
     "android": {
+      "package": "app.moviedu.kid",
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "pan",
+      "allowBackup": true,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#121212",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "app.moviedu.kid",
-      "predictiveBackGestureEnabled": false
+      "navigationBar": {
+        "backgroundColor": "#121212",
+        "barStyle": "light-content"
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.moviedu.kid"
     },
     "plugins": [
       [
@@ -50,7 +53,23 @@
         {
           "photosPermission": "MoviEdu uses a picture you choose for each spelling word."
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": false,
+            "manifestQueries": {
+              "intent": [
+                {
+                  "action": "TTS_SERVICE"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "./plugins/withLargeHeap.js"
     ]
   }
 }

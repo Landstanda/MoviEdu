@@ -21,12 +21,14 @@ import { pickNextWord, recordIncomplete, recordSuccess } from '../srs';
 import { speakText, stopSpeech } from '../speech';
 import { colors } from '../theme';
 import type { ActiveTrial, MediaFile, Settings, Word } from '../types';
+import { UNPLAYABLE_FILE_MESSAGE } from '../probeVideo';
 
 export type PlayerHandle = {
   skipTrial: () => void;
   endSitting: () => void;
   runTestTrial: () => void;
   reloadSettings: () => void;
+  onHardwareBack: () => void;
 };
 
 type Props = {
@@ -37,13 +39,20 @@ type Props = {
 
 type Phase = 'watch' | 'warning' | 'lesson' | 'success';
 
-function fadeVolume(player: { volume: number }, to: number, ms: number) {
+function fadeVolume(player: { volume: number; muted: boolean }, to: number, ms: number) {
   const from = player.volume;
   const start = Date.now();
   const step = () => {
     const t = Math.min(1, (Date.now() - start) / ms);
     player.volume = from + (to - from) * t;
-    if (t < 1) requestAnimationFrame(step);
+    if (t < 1) {
+      requestAnimationFrame(step);
+      return;
+    }
+    player.volume = to;
+    if (to <= 0.001) {
+      player.muted = true;
+    }
   };
   requestAnimationFrame(step);
 }
@@ -84,6 +93,7 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
     const [playAccum, setPlayAccum] = useState(0);
     const [displayTime, setDisplayTime] = useState(media.positionSec);
     const [duration, setDuration] = useState(media.durationSec ?? 0);
+    const [playError, setPlayError] = useState<string | null>(null);
 
     const playAccumRef = useRef(0);
     const lastTimeRef = useRef<number | null>(null);
@@ -101,9 +111,10 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
 
     const player = useVideoPlayer({ uri: media.fileUri }, (p) => {
       p.timeUpdateEventInterval = 0.25;
-      p.audioMixingMode = 'doNotMix';
+      p.audioMixingMode = 'mixWithOthers';
       p.muted = false;
       p.volume = 1;
+      p.keepScreenOnWhilePlaying = true;
     });
 
     const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
@@ -148,8 +159,8 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
       (style: Settings['interruptStyle'], pauseAt: number | null) => {
         setPip(false);
         setVideoHidden(false);
-        player.volume = 1;
         player.muted = false;
+        player.volume = 1;
         if (style !== 'pip_playing_muted' && pauseAt != null) {
           player.currentTime = pauseAt;
         }
@@ -377,6 +388,17 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
       endSitting,
       runTestTrial: () => beginLesson(true),
       reloadSettings,
+      onHardwareBack: () => {
+        if (phaseRef.current === 'lesson' || phaseRef.current === 'success') {
+          persistPosition();
+          if (trialRef.current) saveActiveTrial(trialRef.current);
+          return;
+        }
+        persistPosition().then(() => {
+          player.pause();
+          onLibrary();
+        });
+      },
     }));
 
     useEffect(() => {
@@ -396,7 +418,11 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
           setTrial(existing);
           setPhase('lesson');
           applyInterrupt(s.interruptStyle);
-          if (s.interruptStyle !== 'pip_playing_muted') {
+          if (s.interruptStyle === 'pip_playing_muted') {
+            player.muted = true;
+            player.volume = 0;
+            player.play();
+          } else {
             player.pause();
             if (existing.pauseAtSec != null) player.currentTime = existing.pauseAtSec;
           }
@@ -407,13 +433,23 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
       };
     }, [applyInterrupt, media.id, player]);
 
-    useEventListener(player, 'statusChange', ({ status }) => {
+    useEventListener(player, 'statusChange', ({ status, error }) => {
+      if (status === 'error') {
+        setPlayError(error?.message ? `${UNPLAYABLE_FILE_MESSAGE}\n\n${error.message}` : UNPLAYABLE_FILE_MESSAGE);
+        player.pause();
+        return;
+      }
       if (status === 'readyToPlay' && !restoredRef.current) {
         restoredRef.current = true;
+        setPlayError(null);
         if (phaseRef.current !== 'lesson') {
           if (media.positionSec > 0.5) {
             player.currentTime = media.positionSec;
           }
+          player.play();
+        } else if (settingsRef.current?.interruptStyle === 'pip_playing_muted') {
+          player.muted = true;
+          player.volume = 0;
           player.play();
         }
       }
@@ -490,6 +526,26 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
 
     return (
       <View style={styles.root}>
+        <View
+          pointerEvents="none"
+          style={
+            pip
+              ? styles.videoPip
+              : [styles.videoFull, videoHidden ? styles.videoHidden : null]
+          }
+        >
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="contain"
+            nativeControls={false}
+            surfaceType="textureView"
+            useExoShutter={false}
+            fullscreenOptions={{ enable: false }}
+            allowsPictureInPicture={false}
+          />
+        </View>
+
         <Pressable
           style={styles.tapLayer}
           onPress={() => {
@@ -514,27 +570,26 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
           />
         ) : null}
 
-        <View
-          pointerEvents="none"
-          style={
-            pip
-              ? styles.videoPip
-              : [styles.videoFull, videoHidden ? styles.videoHidden : null]
-          }
-        >
-          <VideoView
-            player={player}
-            style={StyleSheet.absoluteFill}
-            contentFit="contain"
-            nativeControls={false}
-            fullscreenOptions={{ enable: false }}
-            allowsPictureInPicture={false}
-          />
-        </View>
-
         {phase === 'warning' ? (
           <View style={styles.warning} pointerEvents="none">
             <Text style={styles.warningNum}>{warningLeft}</Text>
+          </View>
+        ) : null}
+
+        {playError ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Can’t play this file</Text>
+            <Text style={styles.errorBody}>{playError}</Text>
+            <Pressable
+              style={styles.errorBtn}
+              onPress={async () => {
+                await persistPosition();
+                player.pause();
+                onLibrary();
+              }}
+            >
+              <Text style={styles.errorBtnText}>Back to library</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -589,7 +644,7 @@ const styles = StyleSheet.create({
   },
   tapLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 1,
+    zIndex: 3,
   },
   videoFull: {
     ...StyleSheet.absoluteFill,
@@ -605,14 +660,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.orange,
-    zIndex: 8,
+    zIndex: 25,
   },
   videoHidden: {
     opacity: 0,
   },
   warning: {
     ...StyleSheet.absoluteFill,
-    zIndex: 6,
+    zIndex: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -623,11 +678,45 @@ const styles = StyleSheet.create({
     textShadowColor: '#000',
     textShadowRadius: 12,
   },
+  errorCard: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    top: 80,
+    zIndex: 40,
+    backgroundColor: colors.bgElevated,
+    borderRadius: 12,
+    padding: 18,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  errorTitle: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  errorBody: {
+    color: colors.textDim,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  errorBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.orange,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  errorBtnText: {
+    color: '#111',
+    fontWeight: '800',
+  },
   back: {
     position: 'absolute',
     top: 18,
     left: 16,
-    zIndex: 7,
+    zIndex: 31,
     backgroundColor: 'rgba(0,0,0,0.7)',
     paddingHorizontal: 12,
     paddingVertical: 8,

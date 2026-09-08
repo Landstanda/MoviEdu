@@ -1,12 +1,12 @@
 # MoviEdu — v1 spec
 
-**Status:** v1 spec locked. Implementation started 2026-08-28.  
-**Date:** 2026-08-28  
+**Status:** Product locked. Code exists (Expo 57). **Retarget: Android tablet.** iOS / Apple Developer is abandoned.  
+**Date:** 2026-09-08  
 **Audience:** Parent / builder  
-**Target:** One physical iPad. Sideloaded. Not App Store.  
-**Dev:** Windows or Linux for JavaScript. iOS Simulator / Xcode if a capable Mac exists. Standalone iPad install needs a paid Apple Developer account + EAS (cloud Mac). Expo Go can trial the UI without that.
+**Target:** One physical Android tablet. Sideloaded APK. Not Play Store. Not App Store.  
+**Dev:** Windows x86_64 (or x86_64 Linux). Android Studio + USB. `npx expo run:android --device`.
 
-This GitHub repo is public. Keep movies, photos, character likeness, and secrets out of git. Theme / character assets stay in gitignored `theme/private/`. No network required at runtime.
+This GitHub repo is public. Keep movies, photos, character likeness, keystores, and secrets out of git. Theme / character assets stay in gitignored `theme/private/`. No network required at runtime.
 
 ---
 
@@ -22,7 +22,7 @@ v1 is a plain, high-contrast UI (no character art). Optional movie-themed packs 
 
 ## 2. Product in one sentence
 
-A VLC-like, offline iPad player for a parent-imported movie that warns, then runs a keyboard spelling trial, then returns to the movie — with parent settings for timing, how the video yields to the lesson, and logs.
+A VLC-like, offline **Android tablet** player for a parent-imported movie that warns, then runs a keyboard spelling trial, then returns to the movie — with parent settings for timing, how the video yields to the lesson, and logs.
 
 ---
 
@@ -30,15 +30,15 @@ A VLC-like, offline iPad player for a parent-imported movie that warns, then run
 
 No network. A parent can:
 
-1. Convert the movie if needed (MKV → iPad-safe MP4) and import it.
+1. Convert the movie if needed (prefer MP4 H.264 + AAC) and import it.
 2. Add ~10 words, each with an image.
 3. Set interval, countdown length, questions per interrupt, sitting cap, and interrupt style.
-4. Hand him the iPad. He opens this app (VLC-like library / the movie) instead of VLC.
+4. Hand over the **Android tablet**. The child opens this app (VLC-like library / the movie) instead of VLC.
 5. Visible countdown (length = parent setting) before the lesson.
 6. He spells with the custom QWERTY pad. Correct letters fill in. Success uses the short celebration, then the movie continues.
 7. If he leaves the app mid-lesson and comes back, **he is still on that lesson** — the movie does not start over and the question is not skipped.
 8. Trial is logged.
-9. Parent settings sit behind a **PIN the child does not know** (not the iPad unlock PIN — he already knows that).
+9. Parent settings sit behind a **PIN the child does not know** (not the tablet lock PIN).
 
 ---
 
@@ -51,10 +51,10 @@ No network. A parent can:
 | 1 | Local video import | Files picker. Copy into app sandbox. Parent-facing error if the file will not play. |
 | 2 | VLC-like player | Dark chrome. **Timeline/slider is the primary control** (how he actually scrubs). Play/pause + skip as in VLC. Persist position per file. When chrome is visible: **time until next lesson** (upper right) and **Start lesson now** under it. |
 | 3 | Timed lesson gate | After T minutes of **actual playback** (pauses do not count). Visible countdown N seconds (parent setting). Never a surprise cut. Interval slider minimum **20 seconds** for testing. |
-| 4 | Three interrupt styles | Parent setting. See §6.3. All in-app; **not** iOS system Picture-in-Picture. |
-| 5 | Spelling prompt | Picture (required) + spoken word (iOS TTS). English. Uppercase letters. |
+| 4 | Three interrupt styles | Parent setting. See §6.3. All in-app; **not** Android system Picture-in-Picture. |
+| 5 | Spelling prompt | Picture (required) + spoken word (Android TTS via `expo-speech`). English. Uppercase letters. |
 | 6 | Word introduction | New words show a black-and-white / outline of the word. Correct key → that letter animates and fills with color. After a couple of successes, the outline goes away and he spells from the picture + speech only. |
-| 7 | Custom keyboard | Large QWERTY (AAC-style big keys). Not the system iPad keyboard. |
+| 7 | Custom keyboard | Large QWERTY (AAC-style big keys). Not the system Android keyboard. |
 | 8 | Wrong letter | Horizontal wiggle + “try again.” After 2 misses on that letter, the correct key briefly lights up. He stays on the same word. Adults help if he is stuck. **No automatic “easier word” swap.** |
 | 9 | Success | Last letter correct → word expands briefly → lesson fades into the movie → word pops and vanishes, leaving only the movie. About 0.5s celebrate + short fade. Same every time. |
 | 10 | Multi-question | Default **1** word then movie. Parent can raise Q. If Q > 1, show **“1 of 2”** (etc.) upper left. |
@@ -63,17 +63,17 @@ No network. A parent can:
 | 13 | Words | Parent enters word + image. Video clip per word is later. |
 | 14 | SRS | Simple next-due + ease. Mostly review of emerging words + one slightly new word. Introduction outline is part of “new.” |
 | 15 | Skip / end / remaining count | Parent-only. |
-| 16 | Logs | Timestamp, word, wrong-letter count, fails, time to correct, input_mode (`keyboard`). Export CSV via Share Sheet. |
+| 16 | Logs | Timestamp, word, wrong-letter count, fails, time to correct, input_mode (`keyboard`). Export CSV via Android share sheet. |
 | 17 | App switch safety | Background / swipe away / kill: restore **lesson-in-progress** or **exact movie time**, never restart the movie from zero, never dismiss an unanswered trial. |
 
 ### v1 — out of scope
 
 - Finger/stylus handwriting (v2)
 - Character / movie-likeness theme packs (v2; gitignored)
-- Guided Access (optional; not required for v1)
-- App Store, accounts, cloud sync, analytics
-- Playing MKV/AVI inside the app (convert first — see §10.5)
-- Hijacking VLC process-for-process (iOS cannot make us “be VLC”; we replace the habit — see §10.7)
+- iOS / App Store / Apple Developer (abandoned 2026-09)
+- Play Store, accounts, cloud sync, analytics
+- Assuming every MKV plays (probe and error if not)
+- Hijacking VLC process-for-process (replace the habit: icon + our library)
 - Network required for the child loop
 
 ### v2 (named)
@@ -107,9 +107,9 @@ No network. A parent can:
 
 **Containment (updated):** We are **not** relying on Guided Access. He does not yet know how to turn apps off. The real risk we still handle in software:
 
-- Swiping up / switching apps / locking the iPad **must not** clear the trial or restart the movie.
+- Switching apps / locking the tablet **must not** clear the trial or restart the movie.
 - The lesson overlay has no close button.
-- Parent controls are PIN-gated with a PIN that is **not** the iPad unlock code (he already knows that one).
+- Parent controls are PIN-gated with a PIN that is **not** the tablet unlock code (he already knows that one).
 
 Adults will be with him at first. If he is stuck on a word, he comes to them — same as troubleshooting today.
 
@@ -123,14 +123,14 @@ Predictable and identical: same timings (for a given parent config), same voice,
 
 - App home looks like a **simple VLC-style file list** (dark, orange-cone-adjacent chrome without copying trademarked cone art if we can avoid it — dark player + orange accents is enough).
 - One tap on his imported movie goes full screen, like tapping a title in VLC.
-- Player controls modeled on **VLC for iOS**. The **timeline/slider is the control that matters most** (that is how he scrubs). Also play/pause and ±10s skip. Auto-hide; tap to show.
+- Player controls modeled on **VLC**. The **timeline/slider is the control that matters most** (that is how he scrubs). Also play/pause and ±10s skip. Auto-hide; tap to show.
 - While chrome is visible, **upper right**:
   - a timer counting down until the next lesson
   - **Start lesson now** under it (he can interrupt himself)
   - a small parent lock button
 - Playback position saved ~every second and on pause / background / lesson start.
 
-We cannot make iOS silently launch us instead of VLC when he taps a file inside VLC. Practical replacement:
+Android may offer “open with” for video files; we can register an intent filter later if it is cheap. Practical replacement:
 
 1. Import the (converted) movie into MoviEdu.
 2. Put MoviEdu where he looks for the movie (home screen / dock).
@@ -145,7 +145,7 @@ We cannot make iOS silently launch us instead of VLC when he taps a file inside 
 
 ### 6.3 Interrupt style (parent setting — all three in v1)
 
-These are **in-app**. We will not use iOS system Picture-in-Picture (a floating system window).
+These are **in-app**. We will not use Android system Picture-in-Picture (a floating system window).
 
 | ID | Name in parent UI | What the child sees |
 |----|-------------------|---------------------|
@@ -163,7 +163,7 @@ Factory default: `pause_hidden` (the movie stops and the lesson takes the whole 
 
 - One task on screen (if Q > 1, a small “1 of 2” in the upper left is the only extra).
 - Parent-supplied **image** for the word.
-- iPad **speaks** the word (system TTS; voice chosen in parent settings once, then left alone).
+- The tablet **speaks** the word (Android TTS via `expo-speech`; voice chosen in parent settings once, then left alone).
 - Custom **uppercase QWERTY** pad (large keys, AAC-style). Screenshot can tune spacing later. Until then: letters A–Z only, large QWERTY.
 
 **When the word is new (outline stage)**  
@@ -212,7 +212,7 @@ On next launch: **show the same trial**, do not auto-play past it, do not reset 
 
 ## 7. Parent / therapist mode
 
-**Entry:** Upper-right control, only with player chrome. **Numeric app PIN** (set by parent, stored in Keychain). Not Face ID / not the iPad passcode — he already knows those.
+**Entry:** Upper-right control, only with player chrome. **Numeric app PIN** (set by parent, stored with `expo-secure-store`). Not the tablet lock PIN — he already knows that one.
 
 **Screens**
 
@@ -225,7 +225,7 @@ On next launch: **show the same trial**, do not auto-play past it, do not reset 
    - Questions per interrupt Q (default 1)
    - Remaining lessons this sitting
    - Interrupt style (the three modes in §6.3)
-   - TTS voice picker (installed English iOS voices)
+   - TTS voice picker (installed English Android voices)
 5. **Learning** — new / emerging / proficient; outline vs from-scratch.
 6. **Logs** — history + export CSV.
 7. **Run test trial** — fire a lesson now (so we do not wait T to check UI).
@@ -282,36 +282,31 @@ Interval T can be set as low as **20 seconds** so we can test without watching 1
 
 ## 10. Technical plan
 
-### 10.1 Framework: Expo (React Native) + development build
+### 10.1 Framework: Expo (React Native) — Android first
 
-iOS-only. **Expo dev client** (not Expo Go), because we need file import, audio session, and a custom player overlay.
+Keep the existing Expo 57 codebase. Do **not** rewrite from scratch. Primary target is **Android**. Generate `android/` on the Windows (or Linux) machine with Android Studio.
 
 | Option | Role |
 |--------|------|
-| **Expo + EAS** | Default. Orange Pi edits JS/TS; cloud Mac produces `.ipa`. |
-| Old MacBook | Install `.ipa` / Xcode Devices / first trust of the developer cert. Simulator only if the Mac can still run a recent Xcode. |
-| Flutter / native Swift | Not v1 unless expo-video cannot fade + PiP overlay cleanly. |
+| **`npx expo run:android --device`** | Default. Debug APK on the physical tablet over USB. |
+| Expo Go | Optional UI peek only. Not the daily player. |
+| EAS Android APK | Optional later for a clean release APK without a local SDK. No Apple account. |
+| Flutter / native Kotlin | Only if expo-video overlay on Android is unworkable. |
 
-### 10.2 There is no useful “iOS Simulator in the cloud”
+### 10.2 How we iterate
 
-Cloud Macs (EAS, GitHub Actions) **compile** the app. They do not give you a clickable iPad you drive in the browser.
-
-**How we actually iterate UI**
-
-1. EAS builds a **development** `.ipa` once (needs paid Apple Developer — §11).
-2. Install that on the physical iPad (MacBook).
-3. Orange Pi runs the Expo bundler on the home network.
-4. The iPad loads JS from the Pi — **hot reload** for layout, keyboard, overlays — without rebuilding native every time.
-5. Native changes (audio session, player quirks) need another EAS/Mac build.
-
-The old MacBook’s Simulator is optional. The **physical iPad is the source of truth** (VLC feel, speakers, mute switch, swipe-away).
+1. USB debugging on the tablet.
+2. `npx expo run:android --device` once (creates `android/`, installs debug APK).
+3. JS/TS hot reload from Windows/Linux on the same Wi‑Fi.
+4. Native plugin changes need another Gradle/Expo run.
+5. The **physical Android tablet** is the source of truth (speakers, back gesture, recents, files).
 
 ### 10.3 Player rules
 
 - Keep the player **mounted** under overlays. Do not tear it down for a lesson.
 - `pause_hidden` / `pip_paused`: store `currentTime`, seek + play on success.
 - `pip_playing_muted`: leave it playing, fade volume to 0, restore volume on success (time has advanced).
-- Audio session: **playback** category so the movie still plays if the **hardware mute switch** is on. Fade/duck during TTS.
+- Audio: movie must play even if the tablet volume is low-but-not-zero; fade/duck during TTS. Respect Android volume.
 - Keep screen awake while playing.
 
 ### 10.4 Likely libraries
@@ -320,7 +315,7 @@ The old MacBook’s Simulator is optional. The **physical iPad is the source of 
 |------|------|
 | Video | `expo-video` |
 | Import | `expo-document-picker` + `expo-file-system` |
-| Speech | `expo-speech` (iOS `AVSpeechSynthesizer`) |
+| Speech | `expo-speech` (Android TTS) |
 | Parent PIN | `expo-secure-store` |
 | Data | `expo-sqlite` (words, SRS, logs, settings, trial-in-progress) |
 | Keep awake | `expo-keep-awake` |
@@ -328,27 +323,27 @@ The old MacBook’s Simulator is optional. The **physical iPad is the source of 
 
 ### 10.5 Video format (MKV)
 
-**VLC plays MKV. Apple’s player does not.** MoviEdu uses the iPad’s built-in player (AVPlayer). A “weird” MKV/AVI will import and then sit on a black screen.
+**VLC plays MKV. Android’s player may not.** MoviEdu uses `expo-video` (ExoPlayer). A “weird” MKV/AVI can import and then sit on a black screen.
 
 **Parent action (once):** convert in HandBrake (or similar) to **MP4, H.264 + AAC**. Then import that file.
 
-On import we probe duration; if iOS rejects the file, show: “This file can’t play on iPad. Convert it to MP4 (H.264) and try again.” Copying a feature film **duplicates** several GB — warn about free space.
+On import we probe duration; if Android will not play the file, show: “This file can’t play on this tablet. Convert it to MP4 (H.264) and try again.” Copying a feature film **duplicates** several GB — warn about free space.
 
-### 10.6 Apple text-to-speech (how it actually works)
+### 10.6 Text-to-speech
 
-Layman: the iPad already contains voices. We send it the letters of the word; it reads them aloud. That is **not** a movie-character voice, and Apple does not let us paste one in.
+Layman: the tablet already contains voices. We send it the letters of the word; it reads them aloud. That is **not** a movie-character voice.
 
 | What you can do in v1 | What you cannot |
 |----------------------|-----------------|
-| Pick any **English voice installed on the iPad** (Settings → Accessibility → Spoken Content → Voices, plus our in-app picker) | Use a copyrighted character voice via Apple TTS |
-| Same voice every trial | Clone a character by typing his name |
-| Later (v2): play a **recorded** clip per word, or a clip from a local voice model | Stream a cloud voice-clone at runtime (we are offline-first anyway) |
+| Pick an **English** voice from those installed (`expo-speech`) | Use a copyrighted character voice |
+| Same voice every trial | Clone a character by typing a name |
+| Later (v2): recorded clip per word, or a local voice model | Cloud voice-clone at runtime (offline-first) |
 
-Premium / “Enhanced” voices: parent may need to **download** them once on the iPad (Wi‑Fi). After that, airplane mode is fine.
+Parent may need to install a TTS language pack once (Wi‑Fi). After that, airplane mode is fine.
 
 ### 10.7 “Open instead of VLC”
 
-iOS has no “always use this app instead of VLC” switch that steals VLC’s library. We replace the **habit**: MoviEdu *looks* like his player and *holds* the movie. Registering `public.movie` / `public.mpeg-4` document types is a bonus for Files.
+Android may offer “open with” for video files if we register an intent filter; do that if cheap. Still replace the **habit**: MoviEdu *looks* like the player and *holds* the movie. Home-screen icon, bury VLC.
 
 ### 10.8 Architecture
 
@@ -380,22 +375,17 @@ v1 UI is generic high-contrast + VLC-like dark player.
 
 ---
 
-## 11. Signing — you do need the paid Apple account
+## 11. Signing — Android sideload, not Apple
 
-A **free** Apple ID signs apps for about **7 days**, then the icon dies. That is unacceptable for his movie iPad.
+**iOS is abandoned.** Do not spend time on Apple IDs, UDID, `.ipa`, or EAS iOS.
 
-**Buy:** [Apple Developer Program](https://developer.apple.com/programs/) (~$99/year).  
-Register this iPad’s **UDID**. Enable **Developer Mode** on the iPad. Use **ad-hoc** (or development) profiles.
+For Android:
 
-You can **write code** before the account exists. You **cannot** put a lasting build on the iPad without it. EAS will also need that account (or an Apple “App Store Connect API key”) to sign.
+- Debug: `npx expo run:android --device` (USB). Enable Developer options + USB debugging on the tablet.
+- Release: local `assembleRelease` or EAS `eas build --platform android --profile preview` (APK). Store the keystore **off GitHub**.
+- Install: `adb install` or copy the APK onto the tablet and open it (allow “install unknown apps”).
 
-**Install path we are aiming for**
-
-1. EAS → signed `.ipa`
-2. Old MacBook: Xcode → Window → Devices, or Apple Configurator, drop the `.ipa` on the iPad
-3. Trust the developer in iPad Settings
-
-Linux `ideviceinstaller` is a bonus, not the plan.
+Unknown-sources / “install from this source” is expected for a family sideload.
 
 ---
 
@@ -428,10 +418,10 @@ Linux `ideviceinstaller` is a bonus, not the plan.
 | Keyboard | Large QWERTY; refine from a screenshot if needed |
 | Fail | Wiggle + “try again”; light correct key after 2 misses; stay on word |
 | Success | Word expands → fade to movie → word pops away (~0.5s) |
-| TTS | iOS built-in; parent picks voice later |
-| Parent lock | App PIN ≠ iPad PIN |
-| Guided Access | Off |
-| Audio | Plays even if mute switch is on |
+| TTS | Android TTS via expo-speech; parent picks voice later |
+| Parent lock | App PIN ≠ tablet lock PIN |
+| Guided Access / screen pinning | Optional Android screen pinning; not required |
+| Audio | Fade/duck for TTS; respect tablet volume |
 | Repo | Public GitHub; `theme/private/` gitignored |
 
 ---
@@ -445,10 +435,10 @@ Linux `ideviceinstaller` is a bonus, not the plan.
 3. **Swipe away mid-trial** — must restore the question. This replaces Guided Access as the #1 product risk.
 4. **Device PIN is not a parent lock.** App PIN is mandatory.
 5. **Cannot steal VLC’s open action.** Habit + icon placement + burying VLC.
-6. **No local Mac for Xcode.** Standalone iPad install needs paid Apple Developer + EAS, or Expo Go for a UI trial from Windows.
-7. **Mute switch / audio session.**
+6. **Android file access / SAF.** Document picker + copy into app storage. Test large films.
+7. **Volume / TTS ducking** on Android (no iOS mute switch).
 8. **Huge file copy** into the sandbox.
-9. **expo-video + fade + mini-player** may need a small native AVPlayer wrapper after step 2.
+9. **expo-video + fade + mini-player on Android** (TextureView overlays; test on the physical tablet).
 10. **Character voice is not TTS.** Do not promise a movie-character voice in v1.
 11. **Keyboard screenshot missing** — generic large QWERTY until a reference image is added locally (do not commit photos of a child).
 
@@ -467,46 +457,44 @@ Linux `ideviceinstaller` is a bonus, not the plan.
 | Beating the app | Not a concern; the “cheat” is spelling. Persist state anyway. |
 | Interrupt | All three styles, parent setting. |
 | Countdown | Parent setting. |
-| Simulator | Expo Go on iPad from Windows for UI trial; EAS + paid Apple for a standalone icon. |
+| Simulator | Android emulator optional; physical tablet is required for accept |
 | Keyboard | Custom, large QWERTY. |
 | Theme v1 | Plain. Private theme pack later (gitignored). |
-| Guided Access | No. |
+| Guided Access | No (Android screen pin optional). |
 | Swipe away | Resume the **question**, never restart the movie. |
-| Format | Convert if MKV; import MP4. |
+| Format | Convert if needed; import MP4 preferred. |
 | Theme files | gitignore private pack. |
 | Teaching | Adults present at first; outline word then fade the hint. |
 | Success motion | Word expands, fade to movie, pop away (~0.5s). |
 | Q | Default 1; counter if Q > 1. |
 | Player to copy | VLC. |
 | PiP | Three parent options (hide / paused mini / playing muted mini). |
-| Speech | iOS TTS now; pick voice later; character voice is v2. |
+| Speech | Device TTS now; pick voice later; character voice is v2. |
 | Stuck | Fetch an adult; parent skip. |
 | Sitting cap | Per sitting (bedtime free play). |
 | Word media | Image now; video later. |
-| Parent lock | Not Guided Access; not device PIN. |
-| Builds | EAS primary; old Mac for install. |
-| Developer account | Will buy. Required to install. |
-| Which iPad | Movie iPad; replace VLC habit. |
+| Parent lock | App PIN, not tablet lock. |
+| Builds | `expo run:android` / APK sideload. |
+| Developer account | None for Android sideload. Apple abandoned. |
+| Device | Android tablet; replace VLC habit. |
 | Case | Uppercase. |
 | Language | English. |
-| Repo | Private. |
+| Repo | Public. |
 
 ---
 
 ## 16. Still needed from you (not code)
 
-1. **Apple Developer Program** (~$99/year) + this iPad’s UDID + Developer Mode on. Required to install.
-2. **Convert the movie** to MP4 (H.264 + AAC) if it is MKV.
-3. Optional keyboard screenshot (keep out of git if it shows a child).
-4. **VLC controls screenshot** → `docs/vlc-controls.png` so we can match the slider.
-5. **Old MacBook:** macOS version / whether Xcode or Apple Configurator will install.
-6. Parent **PIN** you will actually use (you set it in-app on first parent unlock).
+1. USB debugging on the Android tablet; allow install of unknown apps.
+2. **Convert the movie** to MP4 (H.264 + AAC) if playback fails.
+3. Optional keyboard / VLC chrome screenshots (keep out of git if they show a child).
+4. Parent **PIN** (set in-app on first parent unlock).
 
 ---
 
 ## 17. Build status
 
-v1 code is in this repo (Expo SDK 57). Not yet on the iPad — that waits on Apple Developer + EAS + MacBook install. See `SETUP.md`.
+v1 product code is in this repo (Expo SDK 57, JS player + lessons + parent PIN). iOS never shipped. **Standalone APK:** Windows (or x86_64 Linux) + Android Studio + `npx expo run:android --device`. See `SETUP.md`. Expo Go on the tablet is only a temporary preview.
 
 ---
 
@@ -515,5 +503,7 @@ v1 code is in this repo (Expo SDK 57). Not yet on the iPad — that waits on App
 | Date | Change |
 |------|--------|
 | 2026-08-28 | Initial plan from product brief |
-| 2026-08-28 | Locked v1 spec from parent review: VLC, three interrupt styles, outline spelling, no Guided Access, TTS, EAS, sitting cap, leftover confirms only |
-| 2026-08-28 | Playback-time interval; 20s min; chrome lesson timer + Start lesson now; empty boxes; slider-first VLC; build started |
+| 2026-08-28 | Locked v1 spec from parent review |
+| 2026-08-28 | Playback-time interval; 20s min; chrome lesson timer + Start lesson now; empty boxes; slider-first VLC; Expo app started |
+| 2026-09-08 | **Retarget Android tablet.** Apple Developer / iOS abandoned. Expo Go / APK sideload. |
+| 2026-09-08 | Windows x86_64 is the APK build machine. Docs Android-first. |

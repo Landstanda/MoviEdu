@@ -1,39 +1,74 @@
-# MoviEdu setup
+# MoviEdu setup (Android APK)
 
-## Try it from a Windows PC (no Apple $99)
+Target: one Android tablet, **standalone sideloaded APK**. No Play Store. No Apple account.
 
-Windows cannot compile an iPad app. Use **Expo Go** for a UI trial:
+Build machine: **Windows x86_64** (or x86_64 Linux) with Android Studio. This is how you get a real **MoviEdu** icon on the home screen. Expo Go is only a temporary peek, not the daily player.
 
-1. Install Node.js LTS.
-2. `npm install` then `npm run start:go`
-3. iPad: App Store → Expo Go → scan the QR code (same Wi‑Fi).
+This repo is public. Do not commit movies, child photos, character art, PINs, or keystores.
 
-Convert movies to **MP4, H.264 + AAC** before import. VLC’s MKV files will not play.
+## On the Samsung tablet
 
-## Standalone iPad app (own icon)
+1. Settings → **About tablet** → **Software information**.
+2. Tap **Build number** **seven** times (unlock with the tablet PIN if asked).
+3. Back to Settings. Open **Developer options** (near the bottom).
+4. Turn on **USB debugging** (and **USB debugging (Security settings)** if shown).
+5. Plug into the PC with a **data** USB cable. Set USB to **File transfer / MTP**.
+6. On the tablet, tap **Allow** USB debugging. Check **Always allow from this computer**.
+7. To install an APK from Files later, allow **Install unknown apps** for that source.
 
-Needs a paid [Apple Developer Program](https://developer.apple.com/programs/) account. Cloud Macs (EAS) can then produce an `.ipa`. A free Apple ID 7-day sideload requires Xcode on a Mac.
+Confirm on the PC:
 
-```bash
-npm install
-npx eas-cli login
-npx eas-cli init
-npx eas-cli build --platform ios --profile development
+```bat
+adb devices
 ```
 
-Install the `.ipa` with a Mac, Apple Configurator, or similar. Then day-to-day JS updates:
+The tablet should list as `device`, not `unauthorized` and not empty.
 
-```bash
-npx expo start --dev-client
-```
+## On the Windows PC
+
+1. Install [Node.js LTS](https://nodejs.org/) and [Android Studio](https://developer.android.com/studio) (SDK + platform-tools). Accept the Android SDK licenses in Studio.
+2. Pull and install:
+
+   ```bat
+   git clone https://github.com/Landstanda/MoviEdu.git
+   cd MoviEdu
+   git pull
+   npm install
+   ```
+
+3. Plug in the tablet, then:
+
+   ```bat
+   npx expo run:android --device
+   ```
+
+   First run generates `android/` (not in git), compiles a debug APK, and installs **MoviEdu**. Later JS-only tweaks: `npx expo start` with that debug app already on the tablet. Native plugin changes need another `npx expo run:android --device`.
+
+4. Convert movies to **MP4, H.264 + AAC** if playback fails. Do not assume MKV will play.
+
+### Linux (x86_64 only)
+
+Same commands as above (`adb` / `npx expo run:android --device`). Set `ANDROID_HOME` to the SDK (often `%LOCALAPPDATA%\Android\Sdk` on Windows, `~/Android/Sdk` on Linux).
+
+ARM64 Linux (for example an Orange Pi) **cannot** produce this APK: Google’s NDK and CMake are x86_64. Use the Windows desktop.
 
 ## Parent PIN
 
-First tap of **PIN** creates digits for the parent area. Use a code the child does not know.
+First tap of **PIN** creates digits for the parent area. Use a code the child does **not** know (not the tablet lock PIN).
 
 ## First sitting
 
-1. PIN → Sitting → Import movie (MP4)
+1. PIN → Sitting → Import movie (copies into the app; large files take a while)
 2. PIN → Words → add words with pictures
 3. Schedule: **20s** interval while testing, **10 min** for real use
-4. Open the movie and try a lesson
+4. Open the movie: countdown → spell → movie resumes at the same second
+
+## Release APK (later)
+
+```bat
+npx expo prebuild --platform android
+cd android
+gradlew.bat assembleRelease
+```
+
+Keep the keystore **off GitHub**. Sideload with `adb install` or copy the APK onto the tablet and open it.

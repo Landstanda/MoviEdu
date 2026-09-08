@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
-    zIndex: 10,
+    zIndex: 30,
   },
   topRight: {
     alignSelf: 'flex-end',

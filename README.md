@@ -1,43 +1,40 @@
 # MoviEdu
 
-An **offline iPad video player** with a spelling lesson gate. A parent imports a local movie. After a set amount of *playback* time, the app warns, then asks the child to spell a word (picture + spoken word + large QWERTY keyboard). When the word is correct, the movie continues from the same second.
+An **offline Android tablet** video player with a spelling lesson gate. A parent imports a local movie. After a set amount of *playback* time, the app warns, then asks the child to spell a word (picture + spoken word + large QWERTY keyboard). When the word is correct, the movie continues from the same second.
 
-It is meant to look and feel like a simple **VLC-style** player (dark chrome, timeline/slider first). It is **not** an App Store product. There are no accounts and no network required while watching.
+It should look and feel like a simple **VLC-style** player (dark chrome, timeline/slider first). Not a store product. No accounts. No network required while watching.
 
-Full product spec: [PLAN.md](PLAN.md). Device install notes: [SETUP.md](SETUP.md).
+**Ship on one Android tablet** as a sideloaded APK (not Play Store). Build from a **Windows** (or x86_64 Linux) PC with Android Studio and USB debugging: `npx expo run:android --device`.
+
+Full product spec: [PLAN.md](PLAN.md). Install: [SETUP.md](SETUP.md).
 
 ## What it does
 
-- Import MP4 files into the app (Apple’s player does **not** play MKV; convert first)
+- Import video into the app sandbox (prefer MP4 H.264 + AAC; clear error if the file will not play)
 - Remember playback position per file
 - Lesson interval counts only while the movie is actually playing (pauses do not count)
 - Visible countdown before a lesson (never a surprise cut)
-- Optional **Start lesson now** on the player chrome
+- **Start lesson now** on the player chrome, plus a timer until the next lesson
 - Three ways the movie yields to the lesson (hide / paused mini-window / mini-window still playing, muted)
 - New words show an outline; after a couple of successes, empty letter boxes
-- Parent area behind an **app PIN** (not the iPad unlock code): words, pictures, timing, sitting cap, logs
+- Parent area behind an **app PIN** (not the tablet lock screen): words, pictures, timing, sitting cap, logs
 
-## Current limitation: Windows cannot put a custom iOS app on an iPad by itself
+## Build
 
-Apple only lets you compile a real iPad app on a Mac (or a cloud Mac). This machine/Windows PC **cannot** run Xcode.
+Expo SDK 57 / React Native. Product code is in `src/` and `App.tsx`. The daily player is a **standalone debug or release APK** on the tablet (`app.moviedu.kid`), not Expo Go.
 
-**Free way to try the UI on an iPad from Windows**
+```bat
+git pull
+npm install
+npx expo run:android --device
+```
 
-1. Install [Node.js LTS](https://nodejs.org/) on the Windows PC.
-2. Clone this repo, then in the project folder:
+That generates `android/` on the PC (gitignored), compiles, and installs. After that, JS-only changes can use `npx expo start` against the app already on the tablet.
 
-   ```bat
-   npm install
-   npm run start:go
-   ```
+## Why iOS files are still in the repo
 
-3. On the iPad, install **Expo Go** from the App Store.
-4. Scan the QR code (Camera app or Expo Go). Same Wi‑Fi helps.
-
-That runs MoviEdu *inside Expo Go*, not as its own home-screen icon. Good enough to try import, slider, 20-second test interval, and spelling. It is **not** a VLC replacement for daily use.
-
-**Standalone app on the iPad** (own icon, year-long install) needs a paid [Apple Developer Program](https://developer.apple.com/programs/) membership (~$99/year) and a cloud iOS build (EAS). A free Apple ID 7-day install needs Xcode on a Mac we no longer have. Details: [SETUP.md](SETUP.md).
+This started as an iPad project. Apple Developer signup failed, so **iOS is abandoned** and we do not sign, build `.ipa`, or use EAS iOS. Some Expo config and comments still mention iOS because the shared codebase was never rewritten from scratch. Ignore them; Android is the product.
 
 ## Repo notes
 
-This GitHub repo is **public**. Do not commit movies, word photos of a real child, theme/character art, PINs, `.p8` / `.mobileprovision` files, or Apple certificates. Private theme files belong in `theme/private/` (gitignored).
+This GitHub repo is **public**. Do not commit movies, word photos of a real child, theme/character art, PINs, or signing keystores. Private theme files belong in `theme/private/` (gitignored).
