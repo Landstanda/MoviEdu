@@ -11,13 +11,16 @@ Full product spec: [PLAN.md](PLAN.md). Install: [SETUP.md](SETUP.md).
 ## What it does
 
 - Import video into the app sandbox (prefer MP4 H.264 + AAC; clear error if the file will not play)
-- Remember playback position per file
+- Remember playback position per file; **reopen the last movie and resume play** on launch
+- Library lists each movie’s **title, length, and file size**
 - Lesson interval counts only while the movie is actually playing (pauses do not count)
 - Visible countdown before a lesson (never a surprise cut)
 - **Start lesson now** on the player chrome, plus a timer until the next lesson
+- Play/pause uses VLC-style symbols (not the words Play/Pause)
 - Three ways the movie yields to the lesson (hide / paused mini-window / mini-window still playing, muted)
-- New words show an outline; after a couple of successes, empty letter boxes
-- Parent area behind an **app PIN** (not the tablet lock screen): words, pictures, timing, sitting cap, logs
+- Spelling screen: picture on the left, letter boxes on the right; keys light up on press and flash green when correct
+- New words show letters to copy; after a couple of successes, empty boxes (picture + speech only)
+- Parent area behind an **app PIN** (not the tablet lock). Open it from the **gear** (upper right). Tabs: **Play** (import / movies), Words, Schedule, Logs
 
 ## Build
 

@@ -98,7 +98,39 @@ export async function saveMediaPosition(
   }
 }
 
+const LAST_MEDIA_KEY = 'last_media_id';
+
 export async function deleteMedia(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM media WHERE id = ?', id);
+  const last = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM kv WHERE key = ?',
+    LAST_MEDIA_KEY,
+  );
+  if (last?.value === id) {
+    await db.runAsync('DELETE FROM kv WHERE key = ?', LAST_MEDIA_KEY);
+  }
+}
+
+export async function setLastPlayedMediaId(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    LAST_MEDIA_KEY,
+    id,
+  );
+}
+
+export async function getResumeMedia(): Promise<MediaFile | null> {
+  const db = await getDb();
+  const last = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM kv WHERE key = ?',
+    LAST_MEDIA_KEY,
+  );
+  if (last?.value) {
+    const found = await getMedia(last.value);
+    if (found) return found;
+  }
+  const all = await listMedia();
+  return all[0] ?? null;
 }

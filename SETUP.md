@@ -54,14 +54,14 @@ ARM64 Linux (for example an Orange Pi) **cannot** produce this APK: Google’s N
 
 ## Parent PIN
 
-First tap of **PIN** creates digits for the parent area. Use a code the child does **not** know (not the tablet lock PIN).
+First tap of the **gear** (upper right on the library or player chrome) creates digits for the parent area. Use a code the child does **not** know (not the tablet lock PIN).
 
 ## First sitting
 
-1. PIN → Sitting → Import movie (copies into the app; large files take a while)
-2. PIN → Words → add words with pictures
+1. Gear → **Play** → Import movie (copies into the app; large files take a while)
+2. Gear → **Words** → add words with pictures (Save word once; in landscape the list is two columns)
 3. Schedule: **20s** interval while testing, **10 min** for real use
-4. Open the movie: countdown → spell → movie resumes at the same second
+4. The app **opens the last movie on launch** and starts playing. Countdown → spell → movie resumes at the same second. Library is still there if you need to pick a different file.
 
 ## Release APK (later)
 

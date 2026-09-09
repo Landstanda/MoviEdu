@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { ParentSheet } from './src/components/ParentSheet';
 import { getDb } from './src/db/client';
+import { getMedia, getResumeMedia, setLastPlayedMediaId } from './src/db/media';
 import { loadActiveTrial } from './src/db/trial';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { PlayerScreen, type PlayerHandle } from './src/screens/PlayerScreen';
@@ -21,8 +22,11 @@ export default function App() {
     (async () => {
       await getDb();
       const trial = await loadActiveTrial();
-      if (trial?.mediaId) {
-        setRoute({ name: 'player', mediaId: trial.mediaId });
+      const fromTrial = trial?.mediaId ? await getMedia(trial.mediaId) : null;
+      const resume = fromTrial ?? (await getResumeMedia());
+      if (resume) {
+        await setLastPlayedMediaId(resume.id);
+        setRoute({ name: 'player', mediaId: resume.id });
       }
       setReady(true);
     })();
@@ -59,7 +63,10 @@ export default function App() {
       {route.name === 'library' ? (
         <LibraryScreen
           key={libraryKey}
-          onOpenMovie={(id) => setRoute({ name: 'player', mediaId: id })}
+          onOpenMovie={(id) => {
+            void setLastPlayedMediaId(id);
+            setRoute({ name: 'player', mediaId: id });
+          }}
           onParent={() => setParentOpen(true)}
         />
       ) : (

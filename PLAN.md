@@ -1,7 +1,7 @@
 # MoviEdu — v1 spec
 
 **Status:** Product locked. Code exists (Expo 57). **Retarget: Android tablet.** iOS / Apple Developer is abandoned.  
-**Date:** 2026-09-08  
+**Date:** 2026-09-09  
 **Audience:** Parent / builder  
 **Target:** One physical Android tablet. Sideloaded APK. Not Play Store. Not App Store.  
 **Dev:** Windows x86_64 (or x86_64 Linux). Android Studio + USB. `npx expo run:android --device`.
@@ -33,12 +33,12 @@ No network. A parent can:
 1. Convert the movie if needed (prefer MP4 H.264 + AAC) and import it.
 2. Add ~10 words, each with an image.
 3. Set interval, countdown length, questions per interrupt, sitting cap, and interrupt style.
-4. Hand over the **Android tablet**. The child opens this app (VLC-like library / the movie) instead of VLC.
+4. Hand over the **Android tablet**. The child opens this app. It **resumes the last movie** (VLC-like player) instead of VLC.
 5. Visible countdown (length = parent setting) before the lesson.
-6. He spells with the custom QWERTY pad. Correct letters fill in. Success uses the short celebration, then the movie continues.
+6. He spells with the custom QWERTY pad. Picture is on the **left**, letter boxes on the **right**. Correct letters fill in. Success uses the short celebration, then the movie continues.
 7. If he leaves the app mid-lesson and comes back, **he is still on that lesson** — the movie does not start over and the question is not skipped.
 8. Trial is logged.
-9. Parent settings sit behind a **PIN the child does not know** (not the tablet lock PIN).
+9. Parent settings sit behind a **PIN the child does not know** (not the tablet lock PIN). Open parent mode from the **gear** (upper right).
 
 ---
 
@@ -49,17 +49,17 @@ No network. A parent can:
 | # | Feature | Locked behavior |
 |---|---------|-----------------|
 | 1 | Local video import | Files picker. Copy into app sandbox. Parent-facing error if the file will not play. |
-| 2 | VLC-like player | Dark chrome. **Timeline/slider is the primary control** (how he actually scrubs). Play/pause + skip as in VLC. Persist position per file. When chrome is visible: **time until next lesson** (upper right) and **Start lesson now** under it. |
+| 2 | VLC-like player | Dark chrome. **Timeline/slider is the primary control** (how he actually scrubs). Play/pause **symbols** + skip as in VLC. Persist position per file. Launch **resumes the last movie**. When chrome is visible: **time until next lesson** (upper right) and **Start lesson now** under it. |
 | 3 | Timed lesson gate | After T minutes of **actual playback** (pauses do not count). Visible countdown N seconds (parent setting). Never a surprise cut. Interval slider minimum **20 seconds** for testing. |
 | 4 | Three interrupt styles | Parent setting. See §6.3. All in-app; **not** Android system Picture-in-Picture. |
-| 5 | Spelling prompt | Picture (required) + spoken word (Android TTS via `expo-speech`). English. Uppercase letters. |
-| 6 | Word introduction | New words show a black-and-white / outline of the word. Correct key → that letter animates and fills with color. After a couple of successes, the outline goes away and he spells from the picture + speech only. |
-| 7 | Custom keyboard | Large QWERTY (AAC-style big keys). Not the system Android keyboard. |
+| 5 | Spelling prompt | Picture (required) + spoken word (Android TTS via `expo-speech`). English. Uppercase letters. Picture **left**, letter boxes **right**. |
+| 6 | Word introduction | New words show a black-and-white / outline of the word. Correct key → that letter animates and fills with color; the key lights up. After a couple of successes, the outline goes away and he spells from the picture + speech only. |
+| 7 | Custom keyboard | Large QWERTY (AAC-style big keys). Not the system Android keyboard. Keys light on press; correct letter flashes green. |
 | 8 | Wrong letter | Horizontal wiggle + “try again.” After 2 misses on that letter, the correct key briefly lights up. He stays on the same word. Adults help if he is stuck. **No automatic “easier word” swap.** |
 | 9 | Success | Last letter correct → word expands briefly → lesson fades into the movie → word pops and vanishes, leaving only the movie. About 0.5s celebrate + short fade. Same every time. |
 | 10 | Multi-question | Default **1** word then movie. Parent can raise Q. If Q > 1, show **“1 of 2”** (etc.) upper left. |
-| 11 | Sitting cap | Parent sets how many lesson gates remain this sitting (e.g. “two more, then it just plays” at bedtime). |
-| 12 | Parent mode | Small control, upper right, with player chrome. **App PIN**, not device passcode. |
+| 11 | Sitting cap | Parent sets how many lesson gates remain this sitting (e.g. “two more, then it just plays” at bedtime). Parent UI tab is labeled **Play**. |
+| 12 | Parent mode | **Gear** upper right (library and player chrome). **App PIN**, not device passcode. Tabs: Play, Words, Schedule, Logs. |
 | 13 | Words | Parent enters word + image. Video clip per word is later. |
 | 14 | SRS | Simple next-due + ease. Mostly review of emerging words + one slightly new word. Introduction outline is part of “new.” |
 | 15 | Skip / end / remaining count | Parent-only. |
@@ -91,17 +91,17 @@ No network. A parent can:
 ```
 ┌─────────────────────────────────────────────┐
 │                 CHILD MODE                   │
-│  VLC-like library + full-screen movie        │
+│  Last movie resumes; library if none         │
 │  Countdown → spelling trial → movie          │
 │  No settings, no skip, no parent PIN prompt  │
 └─────────────────────────────────────────────┘
                       │
-         small button (only while controls are visible)
+         gear (only while controls are visible, or on library)
                       ▼
 ┌─────────────────────────────────────────────┐
 │                PARENT MODE                   │
 │  App PIN the child does not know             │
-│  Words, schedule, interrupt style, logs      │
+│  Play, Words, schedule, interrupt style, logs│
 └─────────────────────────────────────────────┘
 ```
 
@@ -121,13 +121,14 @@ Predictable and identical: same timings (for a given parent config), same voice,
 
 ### 6.1 Opening the movie (VLC muscle memory)
 
-- App home looks like a **simple VLC-style file list** (dark, orange-cone-adjacent chrome without copying trademarked cone art if we can avoid it — dark player + orange accents is enough).
-- One tap on his imported movie goes full screen, like tapping a title in VLC.
-- Player controls modeled on **VLC**. The **timeline/slider is the control that matters most** (that is how he scrubs). Also play/pause and ±10s skip. Auto-hide; tap to show.
+- Home-screen icon on **this family tablet** is a VLC-like orange cone (sideload only, not a store listing).
+- On launch, the app **opens the last movie and starts playing** at the saved position, with the previous sitting/schedule settings.
+- Library (if opened) is a dark list: **title, length, file size**, resume time. Gear (upper right) opens parent PIN.
+- Player controls modeled on **VLC**. The **timeline/slider is the control that matters most** (that is how he scrubs). Play/pause are **symbols**, plus ±10s skip. Auto-hide; tap to show.
 - While chrome is visible, **upper right**:
   - a timer counting down until the next lesson
   - **Start lesson now** under it (he can interrupt himself)
-  - a small parent lock button
+  - a **gear** for parent settings
 - Playback position saved ~every second and on pause / background / lesson start.
 
 Android may offer “open with” for video files; we can register an intent filter later if it is cheap. Practical replacement:
@@ -212,14 +213,13 @@ On next launch: **show the same trial**, do not auto-play past it, do not reset 
 
 ## 7. Parent / therapist mode
 
-**Entry:** Upper-right control, only with player chrome. **Numeric app PIN** (set by parent, stored with `expo-secure-store`). Not the tablet lock PIN — he already knows that one.
+**Entry:** **Gear** upper right on the library and on player chrome. **Numeric app PIN** (set by parent, stored with `expo-secure-store`). Not the tablet lock PIN — he already knows that one.
 
 **Screens**
 
-1. **Now playing** — skip this trial, end sitting (free play), set remaining lessons.
-2. **Library** — import / delete movie files, storage warning.
-3. **Words** — word text, required image, enabled flag. (Video later.)
-4. **Schedule**
+1. **Play** — import movie, run test trial, skip this trial, end sitting, remaining lessons (left); movie list (right).
+2. **Words** — word text, required image, enabled flag. Landscape: two columns. Labels: New / Getting it / Skilled, and Shows letters vs empty boxes. (Video later.)
+3. **Schedule**
    - Interval T (minutes of the clock we use in §16 Q-interval)
    - Countdown N (seconds)
    - Questions per interrupt Q (default 1)
@@ -349,14 +349,14 @@ Android may offer “open with” for video files if we register an intent filte
 
 ```
 App
-├── LibraryScreen         (VLC-like list of imported files)
-├── PlayerScreen          (player stays mounted during trials)
+├── LibraryScreen         (title, length, size; gear for parent)
+├── PlayerScreen          (player stays mounted during trials; last movie on launch)
 │   ├── VideoSurface
-│   ├── VlcChrome         (play/pause, ±10s, timeline, parent button)
+│   ├── VlcChrome         (play/pause symbols, ±10s, timeline, gear)
 │   ├── CountdownOverlay
-│   └── LessonOverlay     (image, outline/slots, QWERTY, optional mini-player)
+│   └── LessonOverlay     (picture left, letter boxes right, QWERTY)
 ├── ParentStack           (PIN)
-│   ├── Sitting / skip
+│   ├── Play / import / skip
 │   ├── Words + images
 │   ├── Schedule + interrupt style + TTS voice
 │   └── Logs + export

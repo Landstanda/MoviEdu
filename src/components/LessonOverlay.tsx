@@ -14,10 +14,61 @@ type Props = {
   hintLetter: string | null;
   wiggleLetter: string | null;
   wiggleNonce: number;
+  correctLetter: string | null;
+  correctNonce: number;
   celebrating: boolean;
   disabled?: boolean;
   onLetter: (letter: string) => void;
 };
+
+function LetterBox({
+  ch,
+  filled,
+  showOutline,
+  flash,
+  flashNonce,
+}: {
+  ch: string;
+  filled: boolean;
+  showOutline: boolean;
+  flash: boolean;
+  flashNonce: number;
+}) {
+  const glow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!flash) return;
+    glow.setValue(1);
+    Animated.timing(glow, {
+      toValue: 0,
+      duration: 420,
+      delay: 120,
+      useNativeDriver: false,
+    }).start();
+  }, [flash, flashNonce, glow]);
+
+  const backgroundColor = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [filled ? '#163326' : showOutline ? '#111' : colors.box, colors.keyCorrect],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.box,
+        filled && styles.boxFilled,
+        showOutline && !filled && styles.boxOutline,
+        { backgroundColor },
+      ]}
+    >
+      {filled ? (
+        <Text style={styles.letterFill}>{ch}</Text>
+      ) : showOutline ? (
+        <Text style={styles.letterGhost}>{ch}</Text>
+      ) : null}
+    </Animated.View>
+  );
+}
 
 export function LessonOverlay({
   word,
@@ -29,6 +80,8 @@ export function LessonOverlay({
   hintLetter,
   wiggleLetter,
   wiggleNonce,
+  correctLetter,
+  correctNonce,
   celebrating,
   disabled,
   onLetter,
@@ -60,38 +113,36 @@ export function LessonOverlay({
       ) : null}
 
       <View style={styles.prompt}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
-        ) : (
-          <View style={[styles.image, styles.imageMissing]}>
-            <Text style={styles.imageMissingText}>No picture</Text>
-          </View>
-        )}
-        <Text style={styles.spell}>{word ? 'Spell' : 'Ask an adult'}</Text>
-        <Animated.View style={{ transform: [{ scale }], opacity }}>
-          <View style={styles.letters}>
-            {word.split('').map((ch, i) => {
-              const filled = i < filledCount;
-              const showOutline = promptMode === 'outline';
-              return (
-                <View
-                  key={`${ch}-${i}`}
-                  style={[
-                    styles.box,
-                    filled && styles.boxFilled,
-                    showOutline && !filled && styles.boxOutline,
-                  ]}
-                >
-                  {filled ? (
-                    <Text style={styles.letterFill}>{ch}</Text>
-                  ) : showOutline ? (
-                    <Text style={styles.letterGhost}>{ch}</Text>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        </Animated.View>
+        <View style={styles.imageCol}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
+          ) : (
+            <View style={[styles.image, styles.imageMissing]}>
+              <Text style={styles.imageMissingText}>No picture</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.lettersCol}>
+          <Text style={styles.spell}>{word ? 'Spell' : 'Ask an adult'}</Text>
+          <Animated.View style={{ transform: [{ scale }], opacity }}>
+            <View style={styles.letters}>
+              {word.split('').map((ch, i) => {
+                const filled = i < filledCount;
+                const showOutline = promptMode === 'outline';
+                return (
+                  <LetterBox
+                    key={`${ch}-${i}`}
+                    ch={ch}
+                    filled={filled}
+                    showOutline={showOutline}
+                    flash={filled && i === filledCount - 1}
+                    flashNonce={correctNonce}
+                  />
+                );
+              })}
+            </View>
+          </Animated.View>
+        </View>
       </View>
 
       {word.length > 0 ? (
@@ -100,6 +151,8 @@ export function LessonOverlay({
           hintLetter={hintLetter}
           wiggleLetter={wiggleLetter}
           wiggleNonce={wiggleNonce}
+          correctLetter={correctLetter}
+          correctNonce={correctNonce}
           disabled={disabled || celebrating}
         />
       ) : (
@@ -113,7 +166,6 @@ const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.bg,
-    justifyContent: 'space-between',
     paddingTop: 18,
     zIndex: 20,
   },
@@ -127,14 +179,22 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   prompt: {
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    gap: 20,
+  },
+  imageCol: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingLeft: 4,
   },
   image: {
-    width: 220,
-    height: 160,
-    borderRadius: 12,
+    flex: 1,
+    width: '100%',
+    borderRadius: 16,
     backgroundColor: colors.bgElevated,
   },
   imageMissing: {
@@ -145,24 +205,30 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 16,
   },
+  lettersCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
   spell: {
     color: colors.textDim,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
     letterSpacing: 1,
   },
   letters: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 14,
     flexWrap: 'wrap',
     justifyContent: 'center',
   },
   box: {
-    minWidth: 52,
-    minHeight: 64,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 3,
+    minWidth: 150,
+    minHeight: 180,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 4,
     borderColor: colors.boxBorder,
     backgroundColor: colors.box,
     alignItems: 'center',
@@ -170,19 +236,18 @@ const styles = StyleSheet.create({
   },
   boxFilled: {
     borderColor: colors.letterFill,
-    backgroundColor: '#163326',
   },
   boxOutline: {
-    backgroundColor: '#111',
+    borderColor: colors.boxBorder,
   },
   letterFill: {
     color: colors.letterFill,
-    fontSize: 36,
+    fontSize: 88,
     fontWeight: '800',
   },
   letterGhost: {
     color: colors.letterOutline,
-    fontSize: 36,
+    fontSize: 88,
     fontWeight: '800',
   },
   askHelp: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -18,6 +19,7 @@ import { listLogs, logsToCsv } from '../db/logs';
 import { loadSettings, patchSettings, interruptStyleLabel } from '../db/settings';
 import { deleteWord, insertWord, listWords, updateWord } from '../db/words';
 import { importMovie, pickWordImage, removeFileQuietly, writeTempCsv } from '../files';
+import { displayMovieTitle, normalizeWord } from '../format';
 import { hasParentPin, setParentPin, verifyParentPin } from '../pin';
 import { listEnglishVoices } from '../speech';
 import { colors } from '../theme';
@@ -27,7 +29,9 @@ import {
   type MediaFile,
   type Settings,
   type TrialLog,
+  type PromptMode,
   type Word,
+  type WordStatus,
 } from '../types';
 
 type Tab = 'sitting' | 'words' | 'schedule' | 'logs';
@@ -64,6 +68,10 @@ export function ParentSheet({
   const [newWord, setNewWord] = useState('');
   const [newImage, setNewImage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [savingWord, setSavingWord] = useState(false);
+  const newWordRef = useRef('');
+  const { width, height } = useWindowDimensions();
+  const twoCol = width > height;
 
   useEffect(() => {
     if (!visible) {
@@ -122,14 +130,19 @@ export function ParentSheet({
   }
 
   async function addWord() {
-    if (!newWord.trim()) return;
+    const word = normalizeWord(newWordRef.current || newWord);
+    if (!word || savingWord) return;
+    setSavingWord(true);
     try {
-      await insertWord({ word: newWord, imageUri: newImage });
+      await insertWord({ word, imageUri: newImage });
+      newWordRef.current = '';
       setNewWord('');
       setNewImage(null);
       setWords(await listWords());
-    } catch (e) {
+    } catch {
       Alert.alert('Could not save word');
+    } finally {
+      setSavingWord(false);
     }
   }
 
@@ -193,74 +206,93 @@ export function ParentSheet({
                     onPress={() => setTab(t)}
                     style={[styles.tab, tab === t && styles.tabOn]}
                   >
-                    <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>{t}</Text>
+                    <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>{tabLabel(t)}</Text>
                   </Pressable>
                 ))}
               </View>
 
               {tab === 'sitting' && settings && (
-                <ScrollView contentContainerStyle={styles.body}>
-                  <Text style={styles.label}>Lessons left this sitting</Text>
-                  <Text style={styles.big}>{settings.remainingLessons}</Text>
-                  <View style={styles.row}>
-                    <Btn label="−1" onPress={() => savePatch({ remainingLessons: Math.max(0, settings.remainingLessons - 1) })} />
-                    <Btn label="+1" onPress={() => savePatch({ remainingLessons: settings.remainingLessons + 1 })} />
-                    <Btn label="0 (free play)" onPress={() => savePatch({ remainingLessons: 0 })} />
-                    <Btn label="8" onPress={() => savePatch({ remainingLessons: 8 })} />
-                  </View>
-                  <Btn
-                    label={importing ? 'Copying movie…' : 'Import movie (MP4)'}
-                    onPress={async () => {
-                      if (importing) return;
-                      setImporting(true);
-                      try {
-                        await importMovie();
-                        setMovies(await listMedia());
-                      } catch (e) {
-                        const msg = e instanceof Error ? e.message : String(e);
-                        if (msg !== 'canceled') {
-                          Alert.alert(
-                            'Could not import',
-                            msg.includes('play') || msg.includes('space') || msg.includes('copy')
-                              ? msg
-                              : 'Use an MP4 (H.264 + AAC). MKV files from VLC may not play until converted in HandBrake.',
-                          );
-                        }
-                      } finally {
-                        setImporting(false);
-                      }
-                    }}
-                  />
-                  <Btn label="Run test trial now" onPress={onRunTestTrial} />
-                  {inLesson ? <Btn label="Skip this trial" onPress={onSkipTrial} /> : null}
-                  <Btn label="End sitting (just play)" onPress={onEndSitting} />
-                  <Text style={styles.label}>Movies in the app</Text>
-                  {movies.map((m) => (
-                    <View key={m.id} style={styles.wordRow}>
-                      <Text style={styles.wordTitle}>{m.title}</Text>
-                      <Pressable
-                        onPress={async () => {
-                          await removeFileQuietly(m.fileUri);
-                          await deleteMedia(m.id);
-                          setMovies(await listMedia());
-                          onMediaChanged();
-                        }}
-                      >
-                        <Text style={styles.danger}>Delete</Text>
-                      </Pressable>
+                <View style={styles.playSplit}>
+                  <ScrollView keyboardShouldPersistTaps="handled" style={styles.playCol} contentContainerStyle={styles.playColBody}>
+                    <Text style={styles.label}>Lessons left this sitting</Text>
+                    <Text style={styles.big}>{settings.remainingLessons}</Text>
+                    <View style={styles.row}>
+                      <Btn label="−1" onPress={() => savePatch({ remainingLessons: Math.max(0, settings.remainingLessons - 1) })} />
+                      <Btn label="+1" onPress={() => savePatch({ remainingLessons: settings.remainingLessons + 1 })} />
+                      <Btn label="0 (free play)" onPress={() => savePatch({ remainingLessons: 0 })} />
+                      <Btn label="8" onPress={() => savePatch({ remainingLessons: 8 })} />
                     </View>
-                  ))}
-                </ScrollView>
+                    <Btn
+                      block
+                      label={importing ? 'Copying movie…' : 'Import movie (MP4)'}
+                      onPress={async () => {
+                        if (importing) return;
+                        setImporting(true);
+                        try {
+                          await importMovie();
+                          setMovies(await listMedia());
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : String(e);
+                          if (msg !== 'canceled') {
+                            Alert.alert(
+                              'Could not import',
+                              msg.includes('play') || msg.includes('space') || msg.includes('copy')
+                                ? msg
+                                : 'Use an MP4 (H.264 + AAC). MKV files from VLC may not play until converted in HandBrake.',
+                            );
+                          }
+                        } finally {
+                          setImporting(false);
+                        }
+                      }}
+                    />
+                    <Btn block label="Run test trial now" onPress={onRunTestTrial} />
+                    {inLesson ? <Btn block label="Skip this trial" onPress={onSkipTrial} /> : null}
+                    <Btn block label="End sitting (just play)" onPress={onEndSitting} />
+                  </ScrollView>
+                  <View style={styles.playDivider} />
+                  <ScrollView style={styles.playCol} contentContainerStyle={styles.playColBody}>
+                    <Text style={styles.label}>Movies in the app</Text>
+                    {movies.length === 0 ? (
+                      <Text style={styles.hint}>No movies yet. Import an MP4 on the left.</Text>
+                    ) : null}
+                    {movies.map((m) => (
+                      <View key={m.id} style={styles.wordRow}>
+                        <Text style={styles.wordTitle} numberOfLines={2}>
+                          {displayMovieTitle(m.title, m.fileUri)}
+                        </Text>
+                        <Pressable
+                          onPress={async () => {
+                            await removeFileQuietly(m.fileUri);
+                            await deleteMedia(m.id);
+                            setMovies(await listMedia());
+                            onMediaChanged();
+                          }}
+                        >
+                          <Text style={styles.danger}>Delete</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
               )}
 
               {tab === 'words' && (
-                <ScrollView contentContainerStyle={styles.body}>
+                <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
                   <TextInput
                     value={newWord}
-                    onChangeText={setNewWord}
+                    onChangeText={(t) => {
+                      newWordRef.current = t;
+                      setNewWord(t);
+                    }}
                     placeholder="WORD"
                     placeholderTextColor={colors.textDim}
                     autoCapitalize="characters"
+                    blurOnSubmit
+                    returnKeyType="done"
+                    onSubmitEditing={() => {
+                      void addWord();
+                    }}
                     style={styles.input}
                   />
                   <View style={styles.row}>
@@ -274,38 +306,45 @@ export function ParentSheet({
                         }
                       }}
                     />
-                    <Btn label="Save word" onPress={addWord} />
+                    <Btn label={savingWord ? 'Saving…' : 'Save word'} onPress={() => void addWord()} />
                   </View>
                   {newImage ? (
                     <Image source={{ uri: newImage }} style={styles.preview} />
                   ) : null}
-                  {words.map((w) => (
-                    <View key={w.id} style={styles.wordRow}>
-                      {w.imageUri ? (
-                        <Image source={{ uri: w.imageUri }} style={styles.thumb} />
-                      ) : (
-                        <View style={styles.thumb} />
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.wordTitle}>{w.word}</Text>
-                        <Text style={styles.meta}>
-                          {w.promptMode} · {w.status}
-                          {w.enabled ? '' : ' · off'}
-                        </Text>
+                  <Text style={styles.hint}>
+                    New words start with faint letters to copy. After a couple of right answers, the
+                    letters hide and he spells from the picture and the spoken word. Status goes New
+                    → Getting it → Skilled.
+                  </Text>
+                  <View style={[styles.wordGrid, twoCol && styles.wordGridTwo]}>
+                    {words.map((w) => (
+                      <View key={w.id} style={[styles.wordRow, twoCol && styles.wordRowHalf]}>
+                        {w.imageUri ? (
+                          <Image source={{ uri: w.imageUri }} style={styles.thumb} />
+                        ) : (
+                          <View style={styles.thumb} />
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.wordTitle}>{w.word}</Text>
+                          <Text style={styles.meta}>
+                            {skillLabel(w.status)} · {promptLabel(w.promptMode)}
+                            {w.enabled ? '' : ' · off'}
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => updateWord(w.id, { enabled: !w.enabled }).then(() => listWords().then(setWords))}>
+                          <Text style={styles.link}>{w.enabled ? 'Disable' : 'Enable'}</Text>
+                        </Pressable>
+                        <Pressable onPress={() => deleteWord(w.id).then(() => listWords().then(setWords))}>
+                          <Text style={styles.danger}>Delete</Text>
+                        </Pressable>
                       </View>
-                      <Pressable onPress={() => updateWord(w.id, { enabled: !w.enabled }).then(() => listWords().then(setWords))}>
-                        <Text style={styles.link}>{w.enabled ? 'Disable' : 'Enable'}</Text>
-                      </Pressable>
-                      <Pressable onPress={() => deleteWord(w.id).then(() => listWords().then(setWords))}>
-                        <Text style={styles.danger}>Delete</Text>
-                      </Pressable>
-                    </View>
-                  ))}
+                    ))}
+                  </View>
                 </ScrollView>
               )}
 
               {tab === 'schedule' && settings && (
-                <ScrollView contentContainerStyle={styles.body}>
+                <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
                   <Text style={styles.label}>Interval (movie playing time)</Text>
                   <Text style={styles.big}>
                     {settings.intervalSec >= 60
@@ -398,9 +437,42 @@ export function ParentSheet({
   );
 }
 
-function Btn({ label, onPress }: { label: string; onPress: () => void }) {
+function tabLabel(t: Tab): string {
+  switch (t) {
+    case 'sitting':
+      return 'Play';
+    case 'words':
+      return 'Words';
+    case 'schedule':
+      return 'Schedule';
+    case 'logs':
+      return 'Logs';
+  }
+}
+
+function skillLabel(status: WordStatus): string {
+  switch (status) {
+    case 'new':
+      return 'New';
+    case 'emerging':
+      return 'Getting it';
+    case 'proficient':
+      return 'Skilled';
+  }
+}
+
+function promptLabel(mode: PromptMode): string {
+  switch (mode) {
+    case 'outline':
+      return 'Shows letters';
+    case 'from_scratch':
+      return 'Empty boxes';
+  }
+}
+
+function Btn({ label, onPress, block }: { label: string; onPress: () => void; block?: boolean }) {
   return (
-    <Pressable onPress={onPress} style={styles.btn}>
+    <Pressable onPress={onPress} style={[styles.btn, block && styles.btnBlock]}>
       <Text style={styles.btnText}>{label}</Text>
     </Pressable>
   );
@@ -484,15 +556,25 @@ const styles = StyleSheet.create({
   tabText: {
     color: colors.textDim,
     fontSize: 16,
-    textTransform: 'capitalize',
     fontWeight: '600',
   },
   tabTextOn: {
     color: colors.text,
   },
-  body: {
+  playSplit: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  playCol: {
+    flex: 1,
+  },
+  playColBody: {
     padding: 16,
     gap: 10,
+  },
+  playDivider: {
+    width: 1,
+    backgroundColor: colors.line,
   },
   label: {
     color: colors.textDim,
@@ -516,6 +598,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
   },
+  btnBlock: {
+    alignSelf: 'stretch',
+  },
   btnText: {
     color: '#111',
     fontWeight: '800',
@@ -535,13 +620,24 @@ const styles = StyleSheet.create({
     height: 90,
     borderRadius: 8,
   },
+  wordGrid: {
+    gap: 4,
+  },
+  wordGridTwo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   wordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
+  },
+  wordRowHalf: {
+    width: '48%',
   },
   thumb: {
     width: 48,

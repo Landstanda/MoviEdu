@@ -11,6 +11,27 @@ export function formatClock(totalSec: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+export function formatBytes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n < 0) {
+    return 'Size unknown';
+  }
+  if (n < 1024) return `${Math.round(n)} B`;
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+  const gb = mb / 1024;
+  return `${gb < 10 ? gb.toFixed(1) : gb.toFixed(1)} GB`;
+}
+
+export function displayMovieTitle(title: string, fileUri?: string): string {
+  const t = title?.trim();
+  if (t) return t;
+  const part = fileUri?.split(/[/\\]/).pop() || '';
+  const decoded = decodeURIComponent(part).replace(/\.[^.]+$/, '').trim();
+  return decoded || 'Movie';
+}
+
 export function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

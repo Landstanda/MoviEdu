@@ -13,6 +13,8 @@ type Props = {
   hintLetter: string | null;
   wiggleLetter: string | null;
   wiggleNonce: number;
+  correctLetter: string | null;
+  correctNonce: number;
   disabled?: boolean;
 };
 
@@ -21,6 +23,8 @@ function Key({
   hinted,
   wiggle,
   wiggleNonce,
+  correct,
+  correctNonce,
   onPress,
   disabled,
 }: {
@@ -28,11 +32,14 @@ function Key({
   hinted: boolean;
   wiggle: boolean;
   wiggleNonce: number;
+  correct: boolean;
+  correctNonce: number;
   onPress: () => void;
   disabled?: boolean;
 }) {
   const shake = useRef(new Animated.Value(0)).current;
   const glow = useRef(new Animated.Value(hinted ? 1 : 0)).current;
+  const pressGen = useRef(0);
 
   useEffect(() => {
     if (!wiggle) return;
@@ -53,19 +60,57 @@ function Key({
     }).start();
   }, [hinted, glow]);
 
+  useEffect(() => {
+    if (!correct) return;
+    pressGen.current += 1;
+    glow.stopAnimation();
+    glow.setValue(2);
+    Animated.timing(glow, {
+      toValue: hinted ? 1 : 0,
+      duration: 420,
+      delay: 160,
+      useNativeDriver: false,
+    }).start();
+  }, [correct, correctNonce, glow, hinted]);
+
   const translateX = shake.interpolate({
     inputRange: [-1, 1],
     outputRange: [-8, 8],
   });
 
   const backgroundColor = glow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.key, colors.keyHint],
+    inputRange: [0, 0.5, 1, 2],
+    outputRange: [colors.key, colors.keyPress, colors.keyHint, colors.keyCorrect],
   });
+
+  const lightUp = (to: number) => {
+    Animated.timing(glow, {
+      toValue: to,
+      duration: 80,
+      useNativeDriver: false,
+    }).start();
+  };
 
   return (
     <Animated.View style={{ transform: [{ translateX }], flex: 1 }}>
-      <Pressable onPress={onPress} disabled={disabled} style={styles.keyHit}>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        onPressIn={() => {
+          if (disabled) return;
+          pressGen.current += 1;
+          lightUp(0.5);
+        }}
+        onPressOut={() => {
+          if (disabled) return;
+          const gen = pressGen.current;
+          setTimeout(() => {
+            if (pressGen.current !== gen) return;
+            lightUp(hinted ? 1 : 0);
+          }, 220);
+        }}
+        style={styles.keyHit}
+      >
         <Animated.View style={[styles.key, { backgroundColor }]}>
           <Text style={styles.keyText}>{letter}</Text>
         </Animated.View>
@@ -79,6 +124,8 @@ export function LetterKeyboard({
   hintLetter,
   wiggleLetter,
   wiggleNonce,
+  correctLetter,
+  correctNonce,
   disabled,
 }: Props) {
   return (
@@ -92,6 +139,8 @@ export function LetterKeyboard({
               hinted={hintLetter === letter}
               wiggle={wiggleLetter === letter}
               wiggleNonce={wiggleNonce}
+              correct={correctLetter === letter}
+              correctNonce={correctNonce}
               disabled={disabled}
               onPress={() => onLetter(letter)}
             />
@@ -102,12 +151,14 @@ export function LetterKeyboard({
   );
 }
 
+const KEY_H = 100;
+
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
     paddingHorizontal: 8,
-    paddingBottom: 22,
-    gap: 8,
+    paddingBottom: 56,
+    gap: 10,
   },
   row: {
     flexDirection: 'row',
@@ -120,11 +171,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 52,
   },
   keyHit: {
-    minHeight: 64,
+    minHeight: KEY_H,
   },
   key: {
     flex: 1,
-    minHeight: 64,
+    minHeight: KEY_H,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: colors.keyBorder,

@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { insertLog } from '../db/logs';
-import { getMedia, saveMediaPosition } from '../db/media';
+import { getMedia, saveMediaPosition, setLastPlayedMediaId } from '../db/media';
 import { loadSettings, patchSettings } from '../db/settings';
 import { loadActiveTrial, loadGateProgress, saveActiveTrial, saveGateProgress } from '../db/trial';
 import { listWords } from '../db/words';
@@ -90,6 +90,8 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
     const [hintLetter, setHintLetter] = useState<string | null>(null);
     const [wiggleLetter, setWiggleLetter] = useState<string | null>(null);
     const [wiggleNonce, setWiggleNonce] = useState(0);
+    const [correctLetter, setCorrectLetter] = useState<string | null>(null);
+    const [correctNonce, setCorrectNonce] = useState(0);
     const [playAccum, setPlayAccum] = useState(0);
     const [displayTime, setDisplayTime] = useState(media.positionSec);
     const [duration, setDuration] = useState(media.durationSec ?? 0);
@@ -321,6 +323,8 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
           const updated = { ...current, filledCount: filled, missOnCurrent: 0 };
           persistTrial(updated);
           setHintLetter(null);
+          setCorrectLetter(letter);
+          setCorrectNonce((n) => n + 1);
           if (filled >= current.word.length) {
             onWordComplete();
           }
@@ -409,6 +413,7 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
         wordsCache.current = words;
         if (cancelled) return;
         setSettings(s);
+        void setLastPlayedMediaId(media.id);
         const existing = await loadActiveTrial();
         const gate = await loadGateProgress();
         if (gate && gate.mediaId === media.id) {
@@ -564,6 +569,8 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
             hintLetter={hintLetter}
             wiggleLetter={wiggleLetter}
             wiggleNonce={wiggleNonce}
+            correctLetter={correctLetter}
+            correctNonce={correctNonce}
             celebrating={phase === 'success'}
             onLetter={onLetter}
             disabled={!trial.word}

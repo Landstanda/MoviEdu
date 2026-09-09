@@ -1,5 +1,6 @@
 import Slider from '@react-native-community/slider';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { GearButton } from './GearButton';
 import { formatClock } from '../format';
 import { colors } from '../theme';
 
@@ -42,9 +43,7 @@ export function VlcChrome({
   return (
     <View style={styles.root} pointerEvents="box-none">
       <View style={styles.topRight}>
-        <Pressable onPress={onParent} style={styles.lock}>
-          <Text style={styles.lockText}>PIN</Text>
-        </Pressable>
+        <GearButton onPress={onParent} />
         <View style={styles.timerCard}>
           <Text style={styles.timerLabel}>Next lesson</Text>
           <Text style={styles.timerValue}>{untilLabel}</Text>
@@ -74,8 +73,15 @@ export function VlcChrome({
           <Pressable onPress={() => onSkip(-10)} style={styles.ctrl}>
             <Text style={styles.ctrlText}>−10</Text>
           </Pressable>
-          <Pressable onPress={onTogglePlay} style={styles.play}>
-            <Text style={styles.playText}>{playing ? 'Pause' : 'Play'}</Text>
+          <Pressable onPress={onTogglePlay} style={styles.play} accessibilityLabel={playing ? 'Pause' : 'Play'}>
+            {playing ? (
+              <View style={styles.pauseGlyph}>
+                <View style={styles.pauseBar} />
+                <View style={styles.pauseBar} />
+              </View>
+            ) : (
+              <View style={styles.playTriangle} />
+            )}
           </Pressable>
           <Pressable onPress={() => onSkip(10)} style={styles.ctrl}>
             <Text style={styles.ctrlText}>+10</Text>
@@ -98,20 +104,6 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingRight: 16,
     gap: 8,
-  },
-  lock: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: '#666',
-  },
-  lockText: {
-    color: colors.textDim,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1,
   },
   timerCard: {
     backgroundColor: colors.chrome,
@@ -184,16 +176,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   play: {
-    minWidth: 120,
-    minHeight: 56,
-    borderRadius: 12,
-    backgroundColor: colors.orange,
+    width: 72,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playText: {
-    color: '#111',
-    fontSize: 22,
-    fontWeight: '800',
+  pauseGlyph: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pauseBar: {
+    width: 10,
+    height: 28,
+    borderRadius: 2,
+    backgroundColor: '#ffffff',
+  },
+  playTriangle: {
+    width: 0,
+    height: 0,
+    marginLeft: 6,
+    borderTopWidth: 14,
+    borderBottomWidth: 14,
+    borderLeftWidth: 24,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: '#ffffff',
   },
 });
