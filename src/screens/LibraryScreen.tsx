@@ -44,7 +44,7 @@ export function LibraryScreen({ onOpenMovie, onParent }: Props) {
         ))}
         {movies.length === 0 ? (
           <Text style={styles.empty}>
-            No movies yet. Tap the gear (upper right), create a parent PIN, then import an MP4 from Play.
+            No movies yet. Tap the gear (upper right), create a parent PIN, then import an MP4 from General.
           </Text>
         ) : null}
       </ScrollView>

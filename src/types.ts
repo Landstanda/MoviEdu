@@ -12,6 +12,8 @@ export type Settings = {
   interruptStyle: InterruptStyle;
   outlineUntilCorrect: number;
   ttsVoiceId: string | null;
+  ttsRate: number;
+  ttsPitch: number;
 };
 
 export type MediaFile = {
@@ -76,6 +78,8 @@ export const DEFAULT_SETTINGS: Settings = {
   interruptStyle: 'pause_hidden',
   outlineUntilCorrect: 2,
   ttsVoiceId: null,
+  ttsRate: 0.9,
+  ttsPitch: 1,
 };
 
 export const MIN_INTERVAL_SEC = 20;

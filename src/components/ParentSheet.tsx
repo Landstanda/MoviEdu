@@ -16,50 +16,30 @@ import * as Sharing from 'expo-sharing';
 import * as Speech from 'expo-speech';
 import { deleteMedia, listMedia } from '../db/media';
 import { listLogs, logsToCsv } from '../db/logs';
-import { loadSettings, patchSettings, interruptStyleLabel } from '../db/settings';
+import { loadSettings, patchSettings } from '../db/settings';
 import { deleteWord, insertWord, listWords, updateWord } from '../db/words';
 import { importMovie, pickWordImage, removeFileQuietly, writeTempCsv } from '../files';
-import { displayMovieTitle, normalizeWord } from '../format';
+import { spellingImageSource } from '../spellingImages';
+import { displayMovieTitle, formatApproxMinutes, formatBytes, normalizeWord } from '../format';
 import { hasParentPin, setParentPin, verifyParentPin } from '../pin';
-import { listEnglishVoices } from '../speech';
+import { listEnglishVoices, speakText } from '../speech';
 import { colors } from '../theme';
-import {
-  MIN_INTERVAL_SEC,
-  type InterruptStyle,
-  type MediaFile,
-  type Settings,
-  type TrialLog,
-  type PromptMode,
-  type Word,
-  type WordStatus,
-} from '../types';
+import { type MediaFile, type PromptMode, type Settings, type TrialLog, type Word, type WordStatus } from '../types';
 
-type Tab = 'sitting' | 'words' | 'schedule' | 'logs';
+type Tab = 'general' | 'words' | 'language' | 'logs';
 
 type Props = {
   visible: boolean;
-  inLesson: boolean;
   onClose: () => void;
-  onSkipTrial: () => void;
-  onEndSitting: () => void;
-  onRunTestTrial: () => void;
   onMediaChanged: () => void;
 };
 
-export function ParentSheet({
-  visible,
-  inLesson,
-  onClose,
-  onSkipTrial,
-  onEndSitting,
-  onRunTestTrial,
-  onMediaChanged,
-}: Props) {
+export function ParentSheet({ visible, onClose, onMediaChanged }: Props) {
   const [unlocked, setUnlocked] = useState(false);
   const [needsCreate, setNeedsCreate] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
-  const [tab, setTab] = useState<Tab>('sitting');
+  const [tab, setTab] = useState<Tab>('general');
   const [settings, setSettings] = useState<Settings | null>(null);
   const [words, setWords] = useState<Word[]>([]);
   const [logs, setLogs] = useState<TrialLog[]>([]);
@@ -69,6 +49,8 @@ export function ParentSheet({
   const [newImage, setNewImage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [savingWord, setSavingWord] = useState(false);
+  const [numField, setNumField] = useState<null | 'interval' | 'countdown'>(null);
+  const [numDraft, setNumDraft] = useState('');
   const newWordRef = useRef('');
   const { width, height } = useWindowDimensions();
   const twoCol = width > height;
@@ -78,7 +60,8 @@ export function ParentSheet({
       setUnlocked(false);
       setPin('');
       setPinError('');
-      setTab('sitting');
+      setTab('general');
+      setNumField(null);
       return;
     }
     hasParentPin().then((exists) => setNeedsCreate(!exists));
@@ -124,9 +107,37 @@ export function ParentSheet({
     setPin((p) => (p.length >= 8 ? p : p + d));
   }
 
-  async function savePatch(partial: Partial<Settings>) {
+  async function savePatch(partial: Partial<Settings>): Promise<Settings> {
     const next = await patchSettings(partial);
     setSettings(next);
+    return next;
+  }
+
+  function typeNumKey(key: string) {
+    setNumDraft((draft) => pushNumKey(draft, key, numField === 'interval'));
+  }
+
+  async function commitNumField() {
+    if (!numField) return;
+    const n = Number(numDraft);
+    if (!Number.isFinite(n) || n <= 0) {
+      setNumField(null);
+      return;
+    }
+    if (numField === 'interval') {
+      await savePatch({ intervalSec: Math.round(n * 60) });
+    } else {
+      await savePatch({ countdownSec: Math.round(n) });
+    }
+    setNumField(null);
+  }
+
+  function previewVoice(next: Settings) {
+    speakText('Spell the word', {
+      voiceId: next.ttsVoiceId,
+      rate: next.ttsRate,
+      pitch: next.ttsPitch,
+    });
   }
 
   async function addWord() {
@@ -168,9 +179,7 @@ export function ParentSheet({
         <View style={styles.sheet}>
           {!unlocked ? (
             <View style={styles.pinWrap}>
-              <Text style={styles.title}>
-                {needsCreate ? 'Create a parent PIN' : 'Parent PIN'}
-              </Text>
+              <Text style={styles.title}>{needsCreate ? 'Create a parent PIN' : 'Parent PIN'}</Text>
               <Text style={styles.hint}>
                 {needsCreate
                   ? 'This is not the tablet lock PIN. Pick digits only you know.'
@@ -200,10 +209,13 @@ export function ParentSheet({
           ) : (
             <View style={{ flex: 1 }}>
               <View style={styles.tabs}>
-                {(['sitting', 'words', 'schedule', 'logs'] as Tab[]).map((t) => (
+                {(['general', 'words', 'language', 'logs'] as Tab[]).map((t) => (
                   <Pressable
                     key={t}
-                    onPress={() => setTab(t)}
+                    onPress={() => {
+                      setTab(t);
+                      setNumField(null);
+                    }}
                     style={[styles.tab, tab === t && styles.tabOn]}
                   >
                     <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>{tabLabel(t)}</Text>
@@ -211,71 +223,178 @@ export function ParentSheet({
                 ))}
               </View>
 
-              {tab === 'sitting' && settings && (
-                <View style={styles.playSplit}>
-                  <ScrollView keyboardShouldPersistTaps="handled" style={styles.playCol} contentContainerStyle={styles.playColBody}>
-                    <Text style={styles.label}>Lessons left this sitting</Text>
-                    <Text style={styles.big}>{settings.remainingLessons}</Text>
-                    <View style={styles.row}>
-                      <Btn label="−1" onPress={() => savePatch({ remainingLessons: Math.max(0, settings.remainingLessons - 1) })} />
-                      <Btn label="+1" onPress={() => savePatch({ remainingLessons: settings.remainingLessons + 1 })} />
-                      <Btn label="0 (free play)" onPress={() => savePatch({ remainingLessons: 0 })} />
-                      <Btn label="8" onPress={() => savePatch({ remainingLessons: 8 })} />
-                    </View>
-                    <Btn
-                      block
-                      label={importing ? 'Copying movie…' : 'Import movie (MP4)'}
-                      onPress={async () => {
-                        if (importing) return;
-                        setImporting(true);
-                        try {
-                          await importMovie();
-                          setMovies(await listMedia());
-                        } catch (e) {
-                          const msg = e instanceof Error ? e.message : String(e);
-                          if (msg !== 'canceled') {
-                            Alert.alert(
-                              'Could not import',
-                              msg.includes('play') || msg.includes('space') || msg.includes('copy')
-                                ? msg
-                                : 'Use an MP4 (H.264 + AAC). MKV files from VLC may not play until converted in HandBrake.',
-                            );
-                          }
-                        } finally {
-                          setImporting(false);
-                        }
-                      }}
-                    />
-                    <Btn block label="Run test trial now" onPress={onRunTestTrial} />
-                    {inLesson ? <Btn block label="Skip this trial" onPress={onSkipTrial} /> : null}
-                    <Btn block label="End sitting (just play)" onPress={onEndSitting} />
-                  </ScrollView>
-                  <View style={styles.playDivider} />
-                  <ScrollView style={styles.playCol} contentContainerStyle={styles.playColBody}>
-                    <Text style={styles.label}>Movies in the app</Text>
-                    {movies.length === 0 ? (
-                      <Text style={styles.hint}>No movies yet. Import an MP4 on the left.</Text>
-                    ) : null}
-                    {movies.map((m) => (
-                      <View key={m.id} style={styles.wordRow}>
-                        <Text style={styles.wordTitle} numberOfLines={2}>
-                          {displayMovieTitle(m.title, m.fileUri)}
-                        </Text>
-                        <Pressable
-                          onPress={async () => {
-                            await removeFileQuietly(m.fileUri);
-                            await deleteMedia(m.id);
-                            setMovies(await listMedia());
-                            onMediaChanged();
-                          }}
-                        >
-                          <Text style={styles.danger}>Delete</Text>
-                        </Pressable>
+              {tab === 'general' && settings ? (
+                <View style={styles.generalSplit}>
+                  <View style={styles.generalLeft}>
+                    <View style={styles.cell}>
+                      <Text style={styles.cellLabel}>Lessons Remaining</Text>
+                      <Text style={styles.cellValue}>{settings.remainingLessons}</Text>
+                      <View style={styles.chipRow}>
+                        {[
+                          { label: '-5', delta: -5 },
+                          { label: '-1', delta: -1 },
+                          { label: '+1', delta: 1 },
+                          { label: '+5', delta: 5 },
+                          { label: '+10', delta: 10 },
+                        ].map((btn) => (
+                          <Chip
+                            key={btn.label}
+                            label={btn.label}
+                            onPress={() =>
+                              savePatch({
+                                remainingLessons: Math.max(0, Math.min(99, settings.remainingLessons + btn.delta)),
+                              })
+                            }
+                          />
+                        ))}
                       </View>
-                    ))}
-                  </ScrollView>
+                    </View>
+                    <View style={styles.cell}>
+                      <Text style={styles.cellLabel}>Intervals Between Lessons</Text>
+                      <Pressable
+                        style={[styles.numField, numField === 'interval' && styles.numFieldOn]}
+                        onPress={() => {
+                          setNumField('interval');
+                          setNumDraft(minutesFromSec(settings.intervalSec));
+                        }}
+                      >
+                        <Text style={styles.numFieldValue}>
+                          {numField === 'interval' ? numDraft : minutesFromSec(settings.intervalSec)}
+                        </Text>
+                        <Text style={styles.numFieldUnit}>min</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.cell}>
+                      <Text style={styles.cellLabel}>Countdown Warning</Text>
+                      <Pressable
+                        style={[styles.numField, numField === 'countdown' && styles.numFieldOn]}
+                        onPress={() => {
+                          setNumField('countdown');
+                          setNumDraft(String(settings.countdownSec));
+                        }}
+                      >
+                        <Text style={styles.numFieldValue}>
+                          {numField === 'countdown' ? numDraft : String(settings.countdownSec)}
+                        </Text>
+                        <Text style={styles.numFieldUnit}>sec</Text>
+                      </Pressable>
+                    </View>
+                    <View style={[styles.cell, styles.cellLast]}>
+                      <Text style={styles.cellLabel}>Lessons per Interruption</Text>
+                      <Text style={styles.cellValue}>{settings.questionsPerInterrupt}</Text>
+                      <View style={styles.chipRow}>
+                        <Chip
+                          label="-1"
+                          onPress={() =>
+                            savePatch({ questionsPerInterrupt: Math.max(1, settings.questionsPerInterrupt - 1) })
+                          }
+                        />
+                        <Chip
+                          label="+1"
+                          onPress={() =>
+                            savePatch({ questionsPerInterrupt: Math.min(5, settings.questionsPerInterrupt + 1) })
+                          }
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.generalRight}>
+                    {numField ? (
+                      <View style={styles.keypadWrap}>
+                        <Text style={styles.keypadTitle}>
+                          {numField === 'interval' ? 'Interval in minutes' : 'Countdown in seconds'}
+                        </Text>
+                        <Text style={styles.keypadHint}>
+                          {numField === 'interval'
+                            ? 'Decimals are OK (0.5 = 30 seconds). The number stays visible on the left.'
+                            : 'Whole seconds only. The number stays visible on the left.'}
+                        </Text>
+                        <View style={styles.keypad}>
+                          {(numField === 'interval'
+                            ? ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
+                            : ['1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '0', '⌫']
+                          ).map((key) => (
+                            <Pressable
+                              key={key}
+                              style={[styles.keypadKey, key === ' ' && styles.keypadKeyGhost]}
+                              onPress={() => {
+                                if (key === ' ') return;
+                                typeNumKey(key);
+                              }}
+                            >
+                              <Text style={styles.keypadKeyText}>{key === ' ' ? '' : key}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                        <View style={styles.keypadActions}>
+                          <Pressable style={styles.keypadCancel} onPress={() => setNumField(null)}>
+                            <Text style={styles.keypadCancelText}>Cancel</Text>
+                          </Pressable>
+                          <Pressable style={styles.importBtn} onPress={() => void commitNumField()}>
+                            <Text style={styles.importBtnText}>Done</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={{ flex: 1 }}>
+                    <View style={styles.moviesHead}>
+                      <Text style={styles.moviesHeadTitle}>Movies</Text>
+                      <Pressable
+                        style={styles.importBtn}
+                        onPress={async () => {
+                          if (importing) return;
+                          setImporting(true);
+                          try {
+                            await importMovie();
+                            setMovies(await listMedia());
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : String(e);
+                            if (msg !== 'canceled') {
+                              Alert.alert(
+                                'Could not import',
+                                msg.includes('play') || msg.includes('space') || msg.includes('copy')
+                                  ? msg
+                                  : 'Use an MP4 (H.264 + AAC). MKV files from VLC may not play until converted in HandBrake.',
+                              );
+                            }
+                          } finally {
+                            setImporting(false);
+                          }
+                        }}
+                      >
+                        <Text style={styles.importBtnText}>{importing ? 'Copying…' : 'Import movie (MP4)'}</Text>
+                      </Pressable>
+                    </View>
+                    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.movieList}>
+                      {movies.length === 0 ? (
+                        <Text style={styles.hint}>No movies yet. Import an MP4.</Text>
+                      ) : null}
+                      {movies.map((m) => (
+                        <View key={m.id} style={styles.movieRow}>
+                          <Text style={styles.movieTitle} numberOfLines={1}>
+                            {displayMovieTitle(m.title, m.fileUri)}
+                          </Text>
+                          <Text style={styles.movieMeta}>{formatBytes(m.byteSize)}</Text>
+                          <Text style={styles.movieMeta}>{formatApproxMinutes(m.durationSec)}</Text>
+                          <Pressable
+                            onPress={async () => {
+                              await removeFileQuietly(m.fileUri);
+                              await deleteMedia(m.id);
+                              setMovies(await listMedia());
+                              onMediaChanged();
+                            }}
+                          >
+                            <Text style={styles.danger}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </ScrollView>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              )}
+              ) : null}
 
               {tab === 'words' && (
                 <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
@@ -308,19 +427,16 @@ export function ParentSheet({
                     />
                     <Btn label={savingWord ? 'Saving…' : 'Save word'} onPress={() => void addWord()} />
                   </View>
-                  {newImage ? (
-                    <Image source={{ uri: newImage }} style={styles.preview} />
-                  ) : null}
+                  {newImage ? <Image source={{ uri: newImage }} style={styles.preview} /> : null}
                   <Text style={styles.hint}>
-                    New words start with faint letters to copy. After a couple of right answers, the
-                    letters hide and he spells from the picture and the spoken word. Status goes New
-                    → Getting it → Skilled.
+                    New words start with faint letters to copy. After a couple of right answers, the letters hide and he
+                    spells from the picture and the spoken word. Status goes New → Getting it → Skilled.
                   </Text>
                   <View style={[styles.wordGrid, twoCol && styles.wordGridTwo]}>
                     {words.map((w) => (
                       <View key={w.id} style={[styles.wordRow, twoCol && styles.wordRowHalf]}>
-                        {w.imageUri ? (
-                          <Image source={{ uri: w.imageUri }} style={styles.thumb} />
+                        {spellingImageSource(w.word, w.imageUri) ? (
+                          <Image source={spellingImageSource(w.word, w.imageUri)!} style={styles.thumb} />
                         ) : (
                           <View style={styles.thumb} />
                         )}
@@ -331,7 +447,9 @@ export function ParentSheet({
                             {w.enabled ? '' : ' · off'}
                           </Text>
                         </View>
-                        <Pressable onPress={() => updateWord(w.id, { enabled: !w.enabled }).then(() => listWords().then(setWords))}>
+                        <Pressable
+                          onPress={() => updateWord(w.id, { enabled: !w.enabled }).then(() => listWords().then(setWords))}
+                        >
                           <Text style={styles.link}>{w.enabled ? 'Disable' : 'Enable'}</Text>
                         </Pressable>
                         <Pressable onPress={() => deleteWord(w.id).then(() => listWords().then(setWords))}>
@@ -343,69 +461,92 @@ export function ParentSheet({
                 </ScrollView>
               )}
 
-              {tab === 'schedule' && settings && (
-                <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
-                  <Text style={styles.label}>Interval (movie playing time)</Text>
-                  <Text style={styles.big}>
-                    {settings.intervalSec >= 60
-                      ? `${Math.round(settings.intervalSec / 60)} min (${settings.intervalSec}s)`
-                      : `${settings.intervalSec} sec`}
-                  </Text>
-                  <View style={styles.row}>
-                    <Btn label="20s test" onPress={() => savePatch({ intervalSec: MIN_INTERVAL_SEC })} />
-                    <Btn label="1 min" onPress={() => savePatch({ intervalSec: 60 })} />
-                    <Btn label="10 min" onPress={() => savePatch({ intervalSec: 600 })} />
-                    <Btn label="15 min" onPress={() => savePatch({ intervalSec: 900 })} />
+              {tab === 'language' && settings ? (
+                <View style={styles.langSplit}>
+                  <View style={styles.langVoices}>
+                    <Text style={styles.cellLabel}>Voice</Text>
+                    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.voiceList}>
+                      <Pressable
+                        onPress={async () => {
+                          const next = await savePatch({ ttsVoiceId: null });
+                          previewVoice(next);
+                        }}
+                        style={[styles.choice, !settings.ttsVoiceId && styles.choiceOn]}
+                      >
+                        <Text style={styles.choiceText}>Tablet default English</Text>
+                      </Pressable>
+                      {voices.map((v) => (
+                        <Pressable
+                          key={v.identifier}
+                          onPress={async () => {
+                            const next = await savePatch({ ttsVoiceId: v.identifier });
+                            previewVoice(next);
+                          }}
+                          style={[styles.choice, settings.ttsVoiceId === v.identifier && styles.choiceOn]}
+                        >
+                          <Text style={styles.choiceText}>
+                            {v.name} ({v.language})
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
                   </View>
-                  <Text style={styles.label}>Countdown warning</Text>
-                  <Text style={styles.big}>{settings.countdownSec}s</Text>
-                  <View style={styles.row}>
-                    <Btn label="−5s" onPress={() => savePatch({ countdownSec: Math.max(3, settings.countdownSec - 5) })} />
-                    <Btn label="+5s" onPress={() => savePatch({ countdownSec: settings.countdownSec + 5 })} />
-                    <Btn label="5s" onPress={() => savePatch({ countdownSec: 5 })} />
-                    <Btn label="30s" onPress={() => savePatch({ countdownSec: 30 })} />
+                  <View style={styles.langMods}>
+                    <View style={styles.cell}>
+                      <Text style={styles.cellLabel}>Pitch</Text>
+                      <View style={styles.valueBox}>
+                        <Text style={styles.valueBoxNum}>{settings.ttsPitch.toFixed(1)}</Text>
+                      </View>
+                      <View style={styles.chipRow}>
+                        <Chip
+                          label="-0.1"
+                          onPress={async () => {
+                            const next = await savePatch({
+                              ttsPitch: Math.max(0.5, Math.round((settings.ttsPitch - 0.1) * 10) / 10),
+                            });
+                            previewVoice(next);
+                          }}
+                        />
+                        <Chip
+                          label="+0.1"
+                          onPress={async () => {
+                            const next = await savePatch({
+                              ttsPitch: Math.min(2, Math.round((settings.ttsPitch + 0.1) * 10) / 10),
+                            });
+                            previewVoice(next);
+                          }}
+                        />
+                      </View>
+                    </View>
+                    <View style={[styles.cell, styles.cellLast]}>
+                      <Text style={styles.cellLabel}>Rate of speech</Text>
+                      <View style={styles.valueBox}>
+                        <Text style={styles.valueBoxNum}>{settings.ttsRate.toFixed(1)}</Text>
+                      </View>
+                      <View style={styles.chipRow}>
+                        <Chip
+                          label="-0.1"
+                          onPress={async () => {
+                            const next = await savePatch({
+                              ttsRate: Math.max(0.5, Math.round((settings.ttsRate - 0.1) * 10) / 10),
+                            });
+                            previewVoice(next);
+                          }}
+                        />
+                        <Chip
+                          label="+0.1"
+                          onPress={async () => {
+                            const next = await savePatch({
+                              ttsRate: Math.min(1.5, Math.round((settings.ttsRate + 0.1) * 10) / 10),
+                            });
+                            previewVoice(next);
+                          }}
+                        />
+                      </View>
+                    </View>
                   </View>
-                  <Text style={styles.label}>Words per interrupt</Text>
-                  <Text style={styles.big}>{settings.questionsPerInterrupt}</Text>
-                  <View style={styles.row}>
-                    <Btn label="−" onPress={() => savePatch({ questionsPerInterrupt: Math.max(1, settings.questionsPerInterrupt - 1) })} />
-                    <Btn label="+" onPress={() => savePatch({ questionsPerInterrupt: Math.min(5, settings.questionsPerInterrupt + 1) })} />
-                  </View>
-                  <Text style={styles.label}>How the movie yields to the lesson</Text>
-                  {(['pause_hidden', 'pip_paused', 'pip_playing_muted'] as InterruptStyle[]).map((style) => (
-                    <Pressable
-                      key={style}
-                      onPress={() => savePatch({ interruptStyle: style })}
-                      style={[styles.choice, settings.interruptStyle === style && styles.choiceOn]}
-                    >
-                      <Text style={styles.choiceText}>{interruptStyleLabel(style)}</Text>
-                    </Pressable>
-                  ))}
-                  <Text style={styles.hint}>
-                    Pause and hide: movie stops, lesson is full screen.{'\n'}
-                    Mini paused: tiny frozen movie in the corner.{'\n'}
-                    Mini still playing: tiny movie keeps moving with sound off.
-                  </Text>
-                  <Text style={styles.label}>Voice</Text>
-                  <Pressable
-                    onPress={() => savePatch({ ttsVoiceId: null })}
-                    style={[styles.choice, !settings.ttsVoiceId && styles.choiceOn]}
-                  >
-                    <Text style={styles.choiceText}>Tablet default English</Text>
-                  </Pressable>
-                  {voices.map((v) => (
-                    <Pressable
-                      key={v.identifier}
-                      onPress={() => savePatch({ ttsVoiceId: v.identifier })}
-                      style={[styles.choice, settings.ttsVoiceId === v.identifier && styles.choiceOn]}
-                    >
-                      <Text style={styles.choiceText}>
-                        {v.name} ({v.language})
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
+                </View>
+              ) : null}
 
               {tab === 'logs' && (
                 <View style={{ flex: 1 }}>
@@ -437,14 +578,31 @@ export function ParentSheet({
   );
 }
 
+function minutesFromSec(sec: number): string {
+  const mins = Math.round((sec / 60) * 100) / 100;
+  return String(mins);
+}
+
+function pushNumKey(draft: string, key: string, allowDot: boolean): string {
+  if (key === '⌫') return draft.slice(0, -1);
+  if (key === '.') {
+    if (!allowDot || draft.includes('.')) return draft;
+    return draft.length ? `${draft}.` : '0.';
+  }
+  if (!/^\d$/.test(key)) return draft;
+  if (draft.length >= 6) return draft;
+  if (draft === '0' && key !== '.') return key;
+  return draft + key;
+}
+
 function tabLabel(t: Tab): string {
   switch (t) {
-    case 'sitting':
-      return 'Play';
+    case 'general':
+      return 'General';
     case 'words':
       return 'Words';
-    case 'schedule':
-      return 'Schedule';
+    case 'language':
+      return 'Language';
     case 'logs':
       return 'Logs';
   }
@@ -470,6 +628,14 @@ function promptLabel(mode: PromptMode): string {
   }
 }
 
+function Chip({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.chip}>
+      <Text style={styles.chipText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function Btn({ label, onPress, block }: { label: string; onPress: () => void; block?: boolean }) {
   return (
     <Pressable onPress={onPress} style={[styles.btn, block && styles.btnBlock]}>
@@ -481,14 +647,14 @@ function Btn({ label, onPress, block }: { label: string; onPress: () => void; bl
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.72)',
-    padding: 18,
+    backgroundColor: '#000',
+    padding: 8,
     justifyContent: 'center',
   },
   sheet: {
     flex: 1,
-    backgroundColor: colors.bgElevated,
-    borderRadius: 16,
+    backgroundColor: '#000',
+    borderRadius: 8,
     overflow: 'hidden',
   },
   pinWrap: {
@@ -546,7 +712,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   tabOn: {
@@ -554,38 +720,239 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.orange,
   },
   tabText: {
-    color: colors.textDim,
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '700',
   },
   tabTextOn: {
     color: colors.text,
   },
-  playSplit: {
+  generalSplit: {
     flex: 1,
     flexDirection: 'row',
   },
-  playCol: {
+  generalLeft: {
     flex: 1,
+    borderRightWidth: 1,
+    borderRightColor: colors.line,
   },
-  playColBody: {
-    padding: 16,
-    gap: 10,
+  generalRight: {
+    flex: 2,
   },
-  playDivider: {
-    width: 1,
-    backgroundColor: colors.line,
+  cell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+    gap: 8,
   },
-  label: {
-    color: colors.textDim,
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 8,
+  cellLast: {
+    borderBottomWidth: 0,
   },
-  big: {
+  cellLabel: {
     color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  cellValue: {
+    color: colors.text,
+    fontSize: 36,
+    fontWeight: '800',
+  },
+  numField: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  numFieldOn: {
+    borderBottomColor: colors.orange,
+  },
+  numFieldValue: {
+    color: colors.text,
+    fontSize: 36,
+    fontWeight: '800',
+    minWidth: 48,
+    textAlign: 'right',
+  },
+  numFieldUnit: {
+    color: colors.textDim,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  keypadWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  keypadTitle: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  keypadHint: {
+    color: colors.textDim,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  keypad: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: 280,
+    gap: 10,
+    justifyContent: 'center',
+  },
+  keypadKey: {
+    width: 86,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: colors.key,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keypadKeyGhost: {
+    backgroundColor: 'transparent',
+  },
+  keypadKeyText: {
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  keypadActions: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  keypadCancel: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  keypadCancelText: {
+    color: colors.textDim,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  chip: {
+    backgroundColor: colors.orange,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  chipText: {
+    color: '#111',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  valueBox: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    backgroundColor: '#6b6b6b',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  valueBoxNum: {
+    color: '#111',
     fontSize: 28,
     fontWeight: '800',
+  },
+  valueBoxUnit: {
+    color: '#111',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  moviesHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  moviesHeadTitle: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  importBtn: {
+    backgroundColor: colors.orange,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  importBtnText: {
+    color: '#111',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  movieList: {
+    paddingVertical: 8,
+  },
+  movieRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  movieTitle: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  movieMeta: {
+    color: colors.orange,
+    fontSize: 16,
+    fontWeight: '700',
+    minWidth: 72,
+    textAlign: 'right',
+  },
+  langSplit: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  langVoices: {
+    flex: 1,
+    padding: 12,
+    borderRightWidth: 1,
+    borderRightColor: colors.line,
+    gap: 8,
+  },
+  voiceList: {
+    gap: 8,
+    paddingBottom: 16,
+  },
+  langMods: {
+    flex: 1,
+  },
+  body: {
+    padding: 16,
+    gap: 10,
   },
   row: {
     flexDirection: 'row',

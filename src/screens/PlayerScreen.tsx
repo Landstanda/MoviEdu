@@ -17,7 +17,7 @@ import { loadActiveTrial, loadGateProgress, saveActiveTrial, saveGateProgress } 
 import { listWords } from '../db/words';
 import { LessonOverlay } from '../components/LessonOverlay';
 import { VlcChrome } from '../components/VlcChrome';
-import { pickNextWord, recordIncomplete, recordSuccess } from '../srs';
+import { pickNextWord, recordIncomplete, recordSuccess, rememberShownWord } from '../srs';
 import { speakText, stopSpeech } from '../speech';
 import { colors } from '../theme';
 import type { ActiveTrial, MediaFile, Settings, Word } from '../types';
@@ -88,6 +88,7 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
     const [pip, setPip] = useState(false);
     const [videoHidden, setVideoHidden] = useState(false);
     const [hintLetter, setHintLetter] = useState<string | null>(null);
+    const [hintNonce, setHintNonce] = useState(0);
     const [wiggleLetter, setWiggleLetter] = useState<string | null>(null);
     const [wiggleNonce, setWiggleNonce] = useState(0);
     const [correctLetter, setCorrectLetter] = useState<string | null>(null);
@@ -136,40 +137,23 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
       await saveActiveTrial(next);
     }, []);
 
-    const applyInterrupt = useCallback(
-      (style: Settings['interruptStyle']) => {
-        if (style === 'pause_hidden') {
-          player.pause();
-          fadeVolume(player, 0, 700);
-          setPip(false);
-          setVideoHidden(true);
-        } else if (style === 'pip_paused') {
-          player.pause();
-          fadeVolume(player, 0, 500);
-          setVideoHidden(false);
-          setPip(true);
-        } else {
-          fadeVolume(player, 0, 500);
-          setVideoHidden(false);
-          setPip(true);
-        }
-      },
-      [player],
-    );
+    const applyInterrupt = useCallback(() => {
+      player.pause();
+      fadeVolume(player, 0, 700);
+      setPip(false);
+      setVideoHidden(true);
+    }, [player]);
 
-    const restoreMovie = useCallback(
-      (style: Settings['interruptStyle'], pauseAt: number | null) => {
-        setPip(false);
-        setVideoHidden(false);
-        player.muted = false;
-        player.volume = 1;
-        if (style !== 'pip_playing_muted' && pauseAt != null) {
-          player.currentTime = pauseAt;
-        }
-        player.play();
-      },
-      [player],
-    );
+    const restoreMovie = useCallback((pauseAt: number | null) => {
+      setPip(false);
+      setVideoHidden(false);
+      player.muted = false;
+      player.volume = 1;
+      if (pauseAt != null) {
+        player.currentTime = pauseAt;
+      }
+      player.play();
+    }, [player]);
 
     const beginLesson = useCallback(
       async (force: boolean) => {
@@ -180,8 +164,8 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
 
         const words = await listWords();
         wordsCache.current = words;
-        const used: string[] = [];
-        const first = pickNextWord(words, used);
+        const first = pickNextWord(words, []);
+        if (first) rememberShownWord(first.id);
         const pauseAt = player.currentTime;
         player.pause();
 
@@ -204,8 +188,15 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
           };
           await persistTrial(empty);
           setPhase('lesson');
-          applyInterrupt(s.interruptStyle);
-          speakText('Ask an adult for a word', s.ttsVoiceId);
+          setHintLetter(null);
+          setWiggleLetter(null);
+          setCorrectLetter(null);
+          applyInterrupt();
+          speakText('Ask an adult for a word', {
+            voiceId: s.ttsVoiceId,
+            rate: s.ttsRate,
+            pitch: s.ttsPitch,
+          });
           return;
         }
 
@@ -228,11 +219,14 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
         await persistTrial(next);
         setPhase('lesson');
         setHintLetter(null);
-        applyInterrupt(s.interruptStyle);
-        if (s.interruptStyle === 'pip_playing_muted') {
-          player.play();
-        }
-        speakText(first.word.toLowerCase(), s.ttsVoiceId);
+        setWiggleLetter(null);
+        setCorrectLetter(null);
+        applyInterrupt();
+        speakText(`spell ${first.word.toLowerCase()}`, {
+          voiceId: s.ttsVoiceId,
+          rate: s.ttsRate,
+          pitch: s.ttsPitch,
+        });
       },
       [applyInterrupt, media.id, persistTrial, player],
     );
@@ -245,8 +239,10 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
       await persistTrial(null);
       setPhase('watch');
       setHintLetter(null);
+      setWiggleLetter(null);
+      setCorrectLetter(null);
       if (s) {
-        restoreMovie(s.interruptStyle, current?.pauseAtSec ?? null);
+        restoreMovie(current?.pauseAtSec ?? null);
         if (s.remainingLessons > 0) {
           const remaining = Math.max(0, s.remainingLessons - 1);
           const next = await patchSettings({ remainingLessons: remaining });
@@ -280,6 +276,7 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
         const words = await listWords();
         wordsCache.current = words;
         const nxt = pickNextWord(words, current.usedWordIds);
+        if (nxt) rememberShownWord(nxt.id);
         setTimeout(async () => {
           if (!nxt) {
             await finishBackToMovie();
@@ -302,7 +299,13 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
           await persistTrial(cont);
           setPhase('lesson');
           setHintLetter(null);
-          speakText(nxt.word.toLowerCase(), s.ttsVoiceId);
+          setWiggleLetter(null);
+          setCorrectLetter(null);
+          speakText(`spell ${nxt.word.toLowerCase()}`, {
+            voiceId: s.ttsVoiceId,
+            rate: s.ttsRate,
+            pitch: s.ttsPitch,
+          });
         }, 520);
         return;
       }
@@ -315,7 +318,6 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
     const onLetter = useCallback(
       (letter: string) => {
         const current = trialRef.current;
-        const s = settingsRef.current;
         if (!current || !current.word || phaseRef.current !== 'lesson') return;
         const expected = current.word[current.filledCount];
         if (letter === expected) {
@@ -340,9 +342,9 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
         persistTrial(updated);
         setWiggleLetter(letter);
         setWiggleNonce((n) => n + 1);
-        speakText('Try again', s?.ttsVoiceId);
         if (miss >= 2) {
           setHintLetter(expected);
+          setHintNonce((n) => n + 1);
         }
       },
       [onWordComplete, persistTrial],
@@ -371,8 +373,10 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
       await persistTrial(null);
       setPhase('watch');
       setHintLetter(null);
+      setWiggleLetter(null);
+      setCorrectLetter(null);
       const s = settingsRef.current;
-      if (s) restoreMovie(s.interruptStyle, current?.pauseAtSec ?? player.currentTime);
+      if (s) restoreMovie(current?.pauseAtSec ?? player.currentTime);
     }, [persistTrial, player, restoreMovie]);
 
     const endSitting = useCallback(async () => {
@@ -422,15 +426,10 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
         if (existing && existing.mediaId === media.id) {
           setTrial(existing);
           setPhase('lesson');
-          applyInterrupt(s.interruptStyle);
-          if (s.interruptStyle === 'pip_playing_muted') {
-            player.muted = true;
-            player.volume = 0;
-            player.play();
-          } else {
-            player.pause();
-            if (existing.pauseAtSec != null) player.currentTime = existing.pauseAtSec;
-          }
+          if (existing.wordId) rememberShownWord(existing.wordId);
+          applyInterrupt();
+          player.pause();
+          if (existing.pauseAtSec != null) player.currentTime = existing.pauseAtSec;
         }
       })();
       return () => {
@@ -452,10 +451,8 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
             player.currentTime = media.positionSec;
           }
           player.play();
-        } else if (settingsRef.current?.interruptStyle === 'pip_playing_muted') {
-          player.muted = true;
-          player.volume = 0;
-          player.play();
+        } else {
+          player.pause();
         }
       }
     });
@@ -558,6 +555,17 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
             setChromeOn((v) => !v);
           }}
         />
+        {!inLesson ? (
+          <Pressable
+            style={styles.centerHit}
+            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+            onPress={() => {
+              if (isPlaying) player.pause();
+              else player.play();
+              setChromeOn(true);
+            }}
+          />
+        ) : null}
         {inLesson && trial ? (
           <LessonOverlay
             word={trial.word}
@@ -567,6 +575,7 @@ const PlayerInner = forwardRef<PlayerHandle, { media: MediaFile; onLibrary: () =
             questionIndex={trial.questionIndex}
             questionTotal={trial.questionTotal}
             hintLetter={hintLetter}
+            hintNonce={hintNonce}
             wiggleLetter={wiggleLetter}
             wiggleNonce={wiggleNonce}
             correctLetter={correctLetter}
@@ -652,6 +661,14 @@ const styles = StyleSheet.create({
   tapLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 3,
+  },
+  centerHit: {
+    position: 'absolute',
+    left: '16%',
+    right: '16%',
+    top: '18%',
+    bottom: '28%',
+    zIndex: 4,
   },
   videoFull: {
     ...StyleSheet.absoluteFill,

@@ -1,16 +1,18 @@
 import * as Speech from 'expo-speech';
-import { Platform } from 'react-native';
 
-export async function speakText(
-  text: string,
-  voiceId: string | null | undefined,
-): Promise<void> {
+export type SpeakOpts = {
+  voiceId?: string | null;
+  rate?: number;
+  pitch?: number;
+};
+
+export async function speakText(text: string, opts: SpeakOpts = {}): Promise<void> {
   Speech.stop();
   Speech.speak(text, {
     language: 'en-US',
-    rate: Platform.OS === 'android' ? 0.9 : 0.85,
-    pitch: 1,
-    voice: voiceId ?? undefined,
+    rate: opts.rate ?? 0.9,
+    pitch: opts.pitch ?? 1,
+    voice: opts.voiceId ?? undefined,
   });
 }
 

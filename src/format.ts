@@ -19,9 +19,14 @@ export function formatBytes(n: number | null | undefined): string {
   const kb = n / 1024;
   if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
   const mb = kb / 1024;
-  if (mb < 1024) return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+  if (mb < 1024) return `${Math.round(mb)} MB`;
   const gb = mb / 1024;
   return `${gb < 10 ? gb.toFixed(1) : gb.toFixed(1)} GB`;
+}
+
+export function formatApproxMinutes(sec: number | null | undefined): string {
+  if (sec == null || !Number.isFinite(sec) || sec <= 0) return '—';
+  return `${Math.max(1, Math.round(sec / 60))} min`;
 }
 
 export function displayMovieTitle(title: string, fileUri?: string): string {

@@ -1,6 +1,23 @@
 import { getDb } from './client';
 import { newId, normalizeWord } from '../format';
+import { SPELLING_IMAGES } from '../spellingImages';
 import type { PromptMode, Word, WordStatus } from '../types';
+
+/** Enabled bundled words for this sitting. Other bundled cards stay in assets but start off. */
+export const ACTIVE_BUNDLE_WORDS = [
+  'bed',
+  'box',
+  'bus',
+  'dog',
+  'egg',
+  'fan',
+  'fish',
+  'jet',
+  'lips',
+  'mug',
+  'pot',
+  'rat',
+] as const;
 
 function rowToWord(row: {
   id: string;
@@ -106,6 +123,31 @@ export async function insertWord(input: {
     item.createdAt,
   );
   return item;
+}
+
+export async function seedBundledSpellingWords(): Promise<void> {
+  const existing = await listWords();
+  const byWord = new Map(existing.map((w) => [w.word.toUpperCase(), w]));
+  const active = new Set(ACTIVE_BUNDLE_WORDS.map((w) => w.toUpperCase()));
+
+  for (const key of ACTIVE_BUNDLE_WORDS) {
+    const word = key.toUpperCase();
+    const row = byWord.get(word);
+    if (!row) {
+      await insertWord({ word, imageUri: null });
+      continue;
+    }
+    if (!row.enabled) {
+      await updateWord(row.id, { enabled: true });
+    }
+  }
+
+  for (const row of existing) {
+    const key = row.word.toLowerCase();
+    if (row.enabled && key in SPELLING_IMAGES && !active.has(row.word.toUpperCase())) {
+      await updateWord(row.id, { enabled: false });
+    }
+  }
 }
 
 export async function updateWord(

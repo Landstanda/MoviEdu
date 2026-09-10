@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, BackHandler, StyleSheet, View } from 'react-native';
 import { ParentSheet } from './src/components/ParentSheet';
 import { getDb } from './src/db/client';
+import { seedBundledSpellingWords } from './src/db/words';
 import { getMedia, getResumeMedia, setLastPlayedMediaId } from './src/db/media';
 import { loadActiveTrial } from './src/db/trial';
 import { LibraryScreen } from './src/screens/LibraryScreen';
@@ -21,6 +22,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       await getDb();
+      await seedBundledSpellingWords();
       const trial = await loadActiveTrial();
       const fromTrial = trial?.mediaId ? await getMedia(trial.mediaId) : null;
       const resume = fromTrial ?? (await getResumeMedia());
@@ -79,27 +81,10 @@ export default function App() {
       )}
       <ParentSheet
         visible={parentOpen}
-        inLesson={route.name === 'player'}
         onClose={() => {
           setParentOpen(false);
           setLibraryKey((n) => n + 1);
           playerRef.current?.reloadSettings();
-        }}
-        onSkipTrial={() => {
-          playerRef.current?.skipTrial();
-          setParentOpen(false);
-        }}
-        onEndSitting={() => {
-          playerRef.current?.endSitting();
-          setParentOpen(false);
-        }}
-        onRunTestTrial={() => {
-          setParentOpen(false);
-          if (route.name !== 'player') {
-            Alert.alert('Open a movie first', 'Tap the movie, then use Run test trial.');
-            return;
-          }
-          playerRef.current?.runTestTrial();
         }}
         onMediaChanged={() => {
           setLibraryKey((n) => n + 1);

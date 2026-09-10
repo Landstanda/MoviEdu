@@ -59,7 +59,7 @@ First tap of the **gear** (upper right on the library or player chrome) creates 
 ## First sitting
 
 1. Gear → **Play** → Import movie (copies into the app; large files take a while)
-2. Gear → **Words** → add words with pictures (Save word once; in landscape the list is two columns)
+2. Gear → **Words** — bundled `start-here` flashcards (`bag.png`, `cat.png`, …) seed on first launch. Add extra words with pictures if you want. Landscape list is two columns. New Comfy batches: [tools/comfy/README.md](tools/comfy/README.md).
 3. Schedule: **20s** interval while testing, **10 min** for real use
 4. The app **opens the last movie on launch** and starts playing. Countdown → spell → movie resumes at the same second. Library is still there if you need to pick a different file.
 

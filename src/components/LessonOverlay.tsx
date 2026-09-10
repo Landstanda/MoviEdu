@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, View } from 'react-native';
+import { spellingImageSource } from '../spellingImages';
 import { colors } from '../theme';
 import type { PromptMode } from '../types';
 import { LetterKeyboard } from './LetterKeyboard';
@@ -12,6 +13,7 @@ type Props = {
   questionIndex: number;
   questionTotal: number;
   hintLetter: string | null;
+  hintNonce: number;
   wiggleLetter: string | null;
   wiggleNonce: number;
   correctLetter: string | null;
@@ -21,35 +23,77 @@ type Props = {
   onLetter: (letter: string) => void;
 };
 
+function letterMetrics(letterCount: number, colWidth: number) {
+  const n = Math.max(1, letterCount);
+  const gap = n <= 4 ? 12 : Math.max(6, 16 - n);
+  const maxW = 108;
+  const maxH = 130;
+  const inner = Math.max(0, colWidth);
+  const fitted = colWidth > 40 ? (inner - gap * (n - 1)) / n : maxW;
+  const w = Math.min(maxW, Math.max(48, fitted || maxW));
+  const h = Math.min(maxH, w * 1.2);
+  const font = Math.min(88, w * 0.82, h * 0.68);
+  return { w, h, gap, font };
+}
+
 function LetterBox({
   ch,
   filled,
   showOutline,
   flash,
   flashNonce,
+  width,
+  height,
+  fontSize,
 }: {
   ch: string;
   filled: boolean;
   showOutline: boolean;
   flash: boolean;
   flashNonce: number;
+  width: number;
+  height: number;
+  fontSize: number;
 }) {
   const glow = useRef(new Animated.Value(0)).current;
+  const settle = useRef(new Animated.Value(filled && !flash ? 1 : 0)).current;
 
   useEffect(() => {
-    if (!flash) return;
+    if (!filled) {
+      glow.setValue(0);
+      settle.setValue(0);
+      return;
+    }
+    if (!flash) {
+      glow.setValue(0);
+      settle.setValue(1);
+      return;
+    }
     glow.setValue(1);
-    Animated.timing(glow, {
-      toValue: 0,
-      duration: 420,
-      delay: 120,
-      useNativeDriver: false,
-    }).start();
-  }, [flash, flashNonce, glow]);
+    settle.setValue(0);
+    Animated.parallel([
+      Animated.timing(glow, {
+        toValue: 0,
+        duration: 420,
+        delay: 120,
+        useNativeDriver: false,
+      }),
+      Animated.timing(settle, {
+        toValue: 1,
+        duration: 380,
+        delay: 160,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [filled, flash, flashNonce, glow, settle]);
 
   const backgroundColor = glow.interpolate({
     inputRange: [0, 1],
-    outputRange: [filled ? '#163326' : showOutline ? '#111' : colors.box, colors.keyCorrect],
+    outputRange: [filled ? '#1a1a1a' : showOutline ? '#0a0a0a' : colors.box, colors.keyCorrect],
+  });
+  const letterColor = settle.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.keyCorrect, colors.letterFill],
   });
 
   return (
@@ -58,13 +102,13 @@ function LetterBox({
         styles.box,
         filled && styles.boxFilled,
         showOutline && !filled && styles.boxOutline,
-        { backgroundColor },
+        { backgroundColor, width, height },
       ]}
     >
       {filled ? (
-        <Text style={styles.letterFill}>{ch}</Text>
+        <Animated.Text style={[styles.letterFill, { color: letterColor, fontSize }]}>{ch}</Animated.Text>
       ) : showOutline ? (
-        <Text style={styles.letterGhost}>{ch}</Text>
+        <Text style={[styles.letterGhost, { fontSize }]}>{ch}</Text>
       ) : null}
     </Animated.View>
   );
@@ -78,6 +122,7 @@ export function LessonOverlay({
   questionIndex,
   questionTotal,
   hintLetter,
+  hintNonce,
   wiggleLetter,
   wiggleNonce,
   correctLetter,
@@ -88,6 +133,9 @@ export function LessonOverlay({
 }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(1)).current;
+  const [lettersWidth, setLettersWidth] = useState(0);
+  const picture = spellingImageSource(word, imageUri);
+  const metrics = letterMetrics(word.length, lettersWidth);
 
   useEffect(() => {
     if (!celebrating) {
@@ -114,18 +162,24 @@ export function LessonOverlay({
 
       <View style={styles.prompt}>
         <View style={styles.imageCol}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
+          {picture ? (
+            <Image source={picture} style={styles.image} resizeMode="contain" />
           ) : (
             <View style={[styles.image, styles.imageMissing]}>
               <Text style={styles.imageMissingText}>No picture</Text>
             </View>
           )}
         </View>
-        <View style={styles.lettersCol}>
+        <View
+          style={styles.lettersCol}
+          onLayout={(e) => {
+            const next = Math.floor(e.nativeEvent.layout.width);
+            if (next > 0 && next !== lettersWidth) setLettersWidth(next);
+          }}
+        >
           <Text style={styles.spell}>{word ? 'Spell' : 'Ask an adult'}</Text>
           <Animated.View style={{ transform: [{ scale }], opacity }}>
-            <View style={styles.letters}>
+            <View style={[styles.letters, { gap: metrics.gap }]}>
               {word.split('').map((ch, i) => {
                 const filled = i < filledCount;
                 const showOutline = promptMode === 'outline';
@@ -137,6 +191,9 @@ export function LessonOverlay({
                     showOutline={showOutline}
                     flash={filled && i === filledCount - 1}
                     flashNonce={correctNonce}
+                    width={metrics.w}
+                    height={metrics.h}
+                    fontSize={metrics.font}
                   />
                 );
               })}
@@ -149,6 +206,7 @@ export function LessonOverlay({
         <LetterKeyboard
           onLetter={onLetter}
           hintLetter={hintLetter}
+          hintNonce={hintNonce}
           wiggleLetter={wiggleLetter}
           wiggleNonce={wiggleNonce}
           correctLetter={correctLetter}
@@ -206,10 +264,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   lettersCol: {
-    flex: 1,
+    flex: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
+    minWidth: 0,
   },
   spell: {
     color: colors.textDim,
@@ -219,26 +278,23 @@ const styles = StyleSheet.create({
   },
   letters: {
     flexDirection: 'row',
-    gap: 14,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   box: {
-    minWidth: 150,
-    minHeight: 180,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 4,
+    borderRadius: 12,
+    borderWidth: 3,
     borderColor: colors.boxBorder,
     backgroundColor: colors.box,
     alignItems: 'center',
     justifyContent: 'center',
   },
   boxFilled: {
-    borderColor: colors.letterFill,
+    borderColor: '#5a5a5a',
   },
   boxOutline: {
-    borderColor: colors.boxBorder,
+    borderColor: '#2a2a2a',
   },
   letterFill: {
     color: colors.letterFill,
@@ -248,7 +304,7 @@ const styles = StyleSheet.create({
   letterGhost: {
     color: colors.letterOutline,
     fontSize: 88,
-    fontWeight: '800',
+    fontWeight: '500',
   },
   askHelp: {
     color: colors.text,

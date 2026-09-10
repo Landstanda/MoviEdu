@@ -21,6 +21,7 @@ Full product spec: [PLAN.md](PLAN.md). Install: [SETUP.md](SETUP.md).
 - Spelling screen: picture on the left, letter boxes on the right; keys light up on press and flash green when correct
 - New words show letters to copy; after a couple of successes, empty boxes (picture + speech only)
 - Parent area behind an **app PIN** (not the tablet lock). Open it from the **gear** (upper right). Tabs: **Play** (import / movies), Words, Schedule, Logs
+- Kindergarten **start-here** words ship with local ComfyUI flashcards (`assets/spelling/bag.png`, `cat.png`, …). Batch more from the spreadsheet: [tools/comfy/README.md](tools/comfy/README.md).
 
 ## Build
 

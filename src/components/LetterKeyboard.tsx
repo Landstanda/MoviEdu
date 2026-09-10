@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { colors } from '../theme';
 
 const ROWS = [
@@ -8,9 +8,15 @@ const ROWS = [
   ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
 ];
 
+const TOP_KEYS = ROWS[0].length;
+const GAP = 6;
+const KEY_H = 100;
+const H_PAD = 16;
+
 type Props = {
   onLetter: (letter: string) => void;
   hintLetter: string | null;
+  hintNonce: number;
   wiggleLetter: string | null;
   wiggleNonce: number;
   correctLetter: string | null;
@@ -21,99 +27,133 @@ type Props = {
 function Key({
   letter,
   hinted,
+  hintNonce,
   wiggle,
   wiggleNonce,
   correct,
   correctNonce,
   onPress,
   disabled,
+  width,
+  height,
 }: {
   letter: string;
   hinted: boolean;
+  hintNonce: number;
   wiggle: boolean;
   wiggleNonce: number;
   correct: boolean;
   correctNonce: number;
   onPress: () => void;
   disabled?: boolean;
+  width: number;
+  height: number;
 }) {
   const shake = useRef(new Animated.Value(0)).current;
-  const glow = useRef(new Animated.Value(hinted ? 1 : 0)).current;
+  const red = useRef(new Animated.Value(0)).current;
+  const green = useRef(new Animated.Value(0)).current;
+  const press = useRef(new Animated.Value(0)).current;
   const pressGen = useRef(0);
+  const seenHint = useRef(hintNonce);
+  const seenWiggle = useRef(wiggleNonce);
+  const seenCorrect = useRef(correctNonce);
 
   useEffect(() => {
-    if (!wiggle) return;
+    if (!wiggle || wiggleNonce === seenWiggle.current) return;
+    seenWiggle.current = wiggleNonce;
+    pressGen.current += 1;
+    green.stopAnimation();
+    green.setValue(0);
+    press.setValue(0);
     shake.setValue(0);
+    red.stopAnimation();
+    red.setValue(1);
     Animated.sequence([
       Animated.timing(shake, { toValue: 1, duration: 50, useNativeDriver: true }),
       Animated.timing(shake, { toValue: -1, duration: 50, useNativeDriver: true }),
       Animated.timing(shake, { toValue: 1, duration: 50, useNativeDriver: true }),
       Animated.timing(shake, { toValue: 0, duration: 50, useNativeDriver: true }),
     ]).start();
-  }, [wiggle, wiggleNonce, shake]);
-
-  useEffect(() => {
-    Animated.timing(glow, {
-      toValue: hinted ? 1 : 0,
-      duration: 180,
-      useNativeDriver: false,
+    Animated.timing(red, {
+      toValue: 0,
+      duration: 380,
+      delay: 120,
+      useNativeDriver: true,
     }).start();
-  }, [hinted, glow]);
+  }, [wiggle, wiggleNonce, shake, red, green, press]);
 
   useEffect(() => {
-    if (!correct) return;
+    if (!hinted || hintNonce === seenHint.current) return;
+    seenHint.current = hintNonce;
     pressGen.current += 1;
-    glow.stopAnimation();
-    glow.setValue(2);
-    Animated.timing(glow, {
-      toValue: hinted ? 1 : 0,
+    red.stopAnimation();
+    red.setValue(0);
+    press.setValue(0);
+    green.stopAnimation();
+    green.setValue(0);
+    Animated.sequence([
+      Animated.timing(green, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(green, { toValue: 0, duration: 1300, useNativeDriver: true }),
+    ]).start();
+  }, [hinted, hintNonce, red, green, press]);
+
+  useEffect(() => {
+    if (!correct || correctNonce === seenCorrect.current) return;
+    seenCorrect.current = correctNonce;
+    pressGen.current += 1;
+    red.stopAnimation();
+    red.setValue(0);
+    press.setValue(0);
+    green.stopAnimation();
+    green.setValue(1);
+    Animated.timing(green, {
+      toValue: 0,
       duration: 420,
       delay: 160,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
-  }, [correct, correctNonce, glow, hinted]);
+  }, [correct, correctNonce, red, green, press]);
 
   const translateX = shake.interpolate({
     inputRange: [-1, 1],
     outputRange: [-8, 8],
   });
 
-  const backgroundColor = glow.interpolate({
-    inputRange: [0, 0.5, 1, 2],
-    outputRange: [colors.key, colors.keyPress, colors.keyHint, colors.keyCorrect],
-  });
-
-  const lightUp = (to: number) => {
-    Animated.timing(glow, {
-      toValue: to,
-      duration: 80,
-      useNativeDriver: false,
-    }).start();
-  };
-
   return (
-    <Animated.View style={{ transform: [{ translateX }], flex: 1 }}>
+    <Animated.View style={{ transform: [{ translateX }], width, height }}>
       <Pressable
         onPress={onPress}
         disabled={disabled}
         onPressIn={() => {
           if (disabled) return;
           pressGen.current += 1;
-          lightUp(0.5);
+          press.setValue(1);
         }}
         onPressOut={() => {
           if (disabled) return;
           const gen = pressGen.current;
           setTimeout(() => {
             if (pressGen.current !== gen) return;
-            lightUp(hinted ? 1 : 0);
-          }, 220);
+            Animated.timing(press, { toValue: 0, duration: 160, useNativeDriver: true }).start();
+          }, 80);
         }}
-        style={styles.keyHit}
+        style={[styles.keyHit, { width, height }]}
       >
-        <Animated.View style={[styles.key, { backgroundColor }]}>
+        <View style={[styles.key, { width, height }]}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.glow, { backgroundColor: colors.keyPress, opacity: press }]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.glow, { backgroundColor: colors.danger, opacity: red }]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.glow, { backgroundColor: colors.keyCorrect, opacity: green }]}
+          />
           <Text style={styles.keyText}>{letter}</Text>
-        </Animated.View>
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -122,26 +162,41 @@ function Key({
 export function LetterKeyboard({
   onLetter,
   hintLetter,
+  hintNonce,
   wiggleLetter,
   wiggleNonce,
   correctLetter,
   correctNonce,
   disabled,
 }: Props) {
+  const { width: screenW } = useWindowDimensions();
+  const inner = Math.max(0, screenW - H_PAD);
+  const keyW = (inner - GAP * (TOP_KEYS - 1)) / TOP_KEYS;
+
   return (
     <View style={styles.wrap}>
       {ROWS.map((row, i) => (
-        <View key={i} style={[styles.row, i === 1 && styles.rowIndent, i === 2 && styles.rowIndent2]}>
+        <View
+          key={i}
+          style={[
+            styles.row,
+            i === 1 ? { paddingLeft: (keyW + GAP) * 0.5 } : null,
+            i === 2 ? { paddingLeft: (keyW + GAP) * 1.5 } : null,
+          ]}
+        >
           {row.map((letter) => (
             <Key
               key={letter}
               letter={letter}
               hinted={hintLetter === letter}
+              hintNonce={hintNonce}
               wiggle={wiggleLetter === letter}
               wiggleNonce={wiggleNonce}
               correct={correctLetter === letter}
               correctNonce={correctNonce}
               disabled={disabled}
+              width={keyW}
+              height={KEY_H}
               onPress={() => onLetter(letter)}
             />
           ))}
@@ -150,8 +205,6 @@ export function LetterKeyboard({
     </View>
   );
 }
-
-const KEY_H = 100;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -162,29 +215,31 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    gap: 6,
-  },
-  rowIndent: {
-    paddingHorizontal: 18,
-  },
-  rowIndent2: {
-    paddingHorizontal: 52,
+    gap: GAP,
+    alignItems: 'center',
   },
   keyHit: {
-    minHeight: KEY_H,
-  },
-  key: {
-    flex: 1,
-    minHeight: KEY_H,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.keyBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  key: {
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.keyBorder,
+    backgroundColor: colors.key,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  glow: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 8,
+  },
   keyText: {
     color: colors.text,
-    fontSize: 28,
+    fontSize: 56,
     fontWeight: '800',
+    zIndex: 1,
+    includeFontPadding: false,
   },
 });
