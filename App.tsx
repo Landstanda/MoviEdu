@@ -5,6 +5,7 @@ import { ParentSheet } from './src/components/ParentSheet';
 import { getDb } from './src/db/client';
 import { seedBundledSpellingWords } from './src/db/words';
 import { getMedia, getResumeMedia, setLastPlayedMediaId } from './src/db/media';
+import { recoverImportedMovies } from './src/files';
 import { loadActiveTrial } from './src/db/trial';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { PlayerScreen, type PlayerHandle } from './src/screens/PlayerScreen';
@@ -21,16 +22,22 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      await getDb();
-      await seedBundledSpellingWords();
-      const trial = await loadActiveTrial();
-      const fromTrial = trial?.mediaId ? await getMedia(trial.mediaId) : null;
-      const resume = fromTrial ?? (await getResumeMedia());
-      if (resume) {
-        await setLastPlayedMediaId(resume.id);
-        setRoute({ name: 'player', mediaId: resume.id });
+      try {
+        await getDb();
+        await recoverImportedMovies();
+        await seedBundledSpellingWords();
+        const trial = await loadActiveTrial();
+        const fromTrial = trial?.mediaId ? await getMedia(trial.mediaId) : null;
+        const resume = fromTrial ?? (await getResumeMedia());
+        if (resume) {
+          await setLastPlayedMediaId(resume.id);
+          setRoute({ name: 'player', mediaId: resume.id });
+        }
+      } catch (err) {
+        console.warn('boot failed', err);
+      } finally {
+        setReady(true);
       }
-      setReady(true);
     })();
   }, []);
 

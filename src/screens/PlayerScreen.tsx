@@ -64,8 +64,14 @@ export const PlayerScreen = forwardRef<PlayerHandle, Props>(function PlayerScree
   const [media, setMedia] = useState<MediaFile | null>(null);
 
   useEffect(() => {
-    getMedia(mediaId).then(setMedia);
-  }, [mediaId]);
+    getMedia(mediaId).then((row) => {
+      if (row) {
+        setMedia(row);
+        return;
+      }
+      onLibrary();
+    });
+  }, [mediaId, onLibrary]);
 
   if (!media) {
     return (

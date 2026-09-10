@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { insertMedia } from './db/media';
+import { insertMedia, listMedia } from './db/media';
 import { newId } from './format';
 import { probeVideoDuration, UNPLAYABLE_FILE_MESSAGE } from './probeVideo';
 import type { MediaFile } from './types';
@@ -32,6 +32,29 @@ function assertEnoughSpace(byteSize: number | null): void {
     throw new Error(
       `Not enough free space to copy this movie (${needGb} GB). Free up storage and try again.`,
     );
+  }
+}
+
+/** Re-register movie files that are already on disk if the SQLite catalog was wiped. */
+export async function recoverImportedMovies(): Promise<void> {
+  const dir = moviesDir();
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) return;
+  const names = await FileSystem.readDirectoryAsync(dir);
+  const existing = await listMedia();
+  const have = new Set(existing.map((m) => m.fileUri));
+  for (const name of names) {
+    const fileUri = `${dir}${name}`;
+    if (have.has(fileUri)) continue;
+    const st = await FileSystem.getInfoAsync(fileUri);
+    if (!st.exists || st.isDirectory) continue;
+    const title = name.replace(/^[^-]+-/, '').replace(/\.[^.]+$/, '') || name;
+    await insertMedia({
+      title,
+      fileUri,
+      durationSec: null,
+      byteSize: 'size' in st ? st.size ?? null : null,
+    });
   }
 }
 
